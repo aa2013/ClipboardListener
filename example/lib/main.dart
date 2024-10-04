@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:clipboard_listener/clipboard_manager.dart';
 import 'package:clipboard_listener/enums.dart';
 import 'package:flutter/material.dart';
@@ -24,13 +26,19 @@ class _MyAppState extends State<MyApp> with ClipboardListener {
   void initState() {
     super.initState();
     clipboardManager.addListener(this);
-    Permission.systemAlertWindow.request();
-    clipboardManager.getCurrentEnvironment().then((env) {
-      setState(() {
-        this.env = env.name;
-        this.isGranted = env != EnvironmentType.none;
+    if (Platform.isAndroid) {
+      Permission.systemAlertWindow.request();
+      clipboardManager.getCurrentEnvironment().then((env) {
+        setState(() {
+          this.env = env.name;
+          this.isGranted = env != EnvironmentType.none;
+        });
       });
-    });
+    } else if (Platform.isWindows) {
+      clipboardManager.startListening().then((res){
+        print("startListening $res");
+      });
+    }
   }
 
   @override
@@ -48,36 +56,45 @@ class _MyAppState extends State<MyApp> with ClipboardListener {
         ),
         body: Column(
           children: [
-            Text('current environment: $env, status: $isGranted'),
-            Row(
-              children: [
-                GestureDetector(
-                  onTap: isGranted
-                      ? null
-                      : () {
-                          clipboardManager
-                              .requestPermission(EnvironmentType.shizuku);
-                        },
-                  child: const Chip(label: Text("Request Shizuka")),
-                ),
-                const SizedBox(
-                  width: 10,
-                ),
-                GestureDetector(
-                  onTap: isGranted
-                      ? null
-                      : () {
-                          clipboardManager
-                              .requestPermission(EnvironmentType.root);
-                        },
-                  child: const Chip(label: Text("Request Root")),
-                ),
-              ],
-            ),
             const SizedBox(
               height: 10,
             ),
-            Text('$type\n$content\n\n'),
+            //region Android
+            Visibility(
+              visible: Platform.isAndroid,
+              child: Column(
+                children: [
+                  Text('current environment: $env, status: $isGranted'),
+                  Row(
+                    children: [
+                      GestureDetector(
+                        onTap: isGranted
+                            ? null
+                            : () {
+                                clipboardManager
+                                    .requestPermission(EnvironmentType.shizuku);
+                              },
+                        child: const Chip(label: Text("Request Shizuka")),
+                      ),
+                      const SizedBox(
+                        width: 10,
+                      ),
+                      GestureDetector(
+                        onTap: isGranted
+                            ? null
+                            : () {
+                                clipboardManager
+                                    .requestPermission(EnvironmentType.root);
+                              },
+                        child: const Chip(label: Text("Request Root")),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            //endregion
+            Text('type: $type\n\ncontent:\n$content\n\n'),
             const SizedBox(
               height: 10,
             ),

@@ -3,6 +3,15 @@ import 'dart:io';
 import 'package:clipboard_listener/enums.dart';
 import 'package:flutter/services.dart';
 
+class SelectedFilesResult {
+  final List<String> list;
+  final bool succeed;
+
+  SelectedFilesResult(this.succeed, this.list);
+
+  SelectedFilesResult.empty({this.succeed = false, this.list = const []});
+}
+
 abstract mixin class ClipboardListener {
   /// Called when the clipboard content changes.
   ///
@@ -34,6 +43,7 @@ const kStartListening = "startListening";
 const kCheckIsRunning = "checkIsRunning";
 const kCheckPermission = "checkPermission";
 const kRequestPermission = "requestPermission";
+const kGetSelectedFiles = "getSelectedFiles";
 const kCopy = "copy";
 
 class ClipboardManager {
@@ -56,7 +66,6 @@ class ClipboardManager {
 
   ///start listening clipboard change (only Android)
   Future<bool> startListening([String? title, String? desc]) {
-    if (!Platform.isAndroid) return Future.value(false);
     var args = <String, dynamic>{};
     if (title != null) {
       args["title"] = title;
@@ -93,6 +102,22 @@ class ClipboardManager {
     return _channel.invokeMethod(kRequestPermission, args);
   }
 
+  ///get files selected by user in the explorer (only Windows and not desktop folder)
+  Future<SelectedFilesResult> getSelectedFiles() {
+    if (!Platform.isWindows) {
+      return Future.value(SelectedFilesResult.empty());
+    }
+    return _channel.invokeMethod<dynamic>(kGetSelectedFiles).then((res) {
+      if (res == null) {
+        return SelectedFilesResult.empty();
+      }
+      return SelectedFilesResult(
+        res["succeed"] ?? false,
+        (res["list"] as String?)?.split(";") ?? [],
+      );
+    });
+  }
+
   /// copy self content to clipboard，only support text and image
   ///
   ///[type] only support text and image
@@ -106,6 +131,9 @@ class ClipboardManager {
 
   ///getCurrentEnvironment (only Android)
   Future<EnvironmentType> getCurrentEnvironment() async {
+    if (Platform.isAndroid) {
+      return EnvironmentType.none;
+    }
     for (var env in EnvironmentType.values) {
       bool hasPermission = await clipboardManager.checkPermission(env);
       if (hasPermission) return env;
