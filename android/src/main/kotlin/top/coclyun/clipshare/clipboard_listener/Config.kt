@@ -2,7 +2,8 @@ package top.coclyun.clipshare.clipboard_listener
 
 class Config {
     var ignoreNextCopy = false
-    var shizukuNotifyContentTitle = "Shizuku Service"
-    var shizukuNotifyContentText = "Shizuku Service Running"
+    var notifyContentTitle = "Service Running"
+    var notifyContentTextByShizuku = "Service Running By Shizuku"
+    var notifyContentTextByRoot = "Service Running By Root"
     lateinit var applicationId: String
 }

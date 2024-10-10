@@ -1,33 +1,35 @@
-package top.coclyun.clipshare.clipboard_listener
+package top.coclyun.clipshare.clipboard_listener.service
 
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.ServiceConnection
 import android.graphics.PixelFormat
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Message
-import android.os.RemoteException
 import android.provider.Settings
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.view.WindowManager.LayoutParams
-import androidx.annotation.ChecksSdkIntAtLeast
 import androidx.core.app.NotificationCompat
 import rikka.shizuku.Shizuku
-import java.io.BufferedReader
-import java.io.InputStreamReader
+import rikka.shizuku.Shizuku.OnBinderDeadListener
+import rikka.shizuku.Shizuku.OnBinderReceivedListener
+import top.coclyun.clipshare.clipboard_listener.ClipboardListener
+import top.coclyun.clipshare.clipboard_listener.ClipboardListenerPlugin
+import top.coclyun.clipshare.clipboard_listener.ILogCallback
+import top.coclyun.clipshare.clipboard_listener.ILogService
+import top.coclyun.clipshare.clipboard_listener.R
 import java.lang.ref.WeakReference
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 
 class ForegroundService : Service() {
@@ -38,11 +40,8 @@ class ForegroundService : Service() {
         @JvmStatic
         val foregroundServiceNotifyChannelId = "ForegroundService"
 
-        @ChecksSdkIntAtLeast(api = Build.VERSION_CODES.Q)
         @JvmStatic
-        fun needShizuku(): Boolean {
-            return Build.VERSION.SDK_INT > Build.VERSION_CODES.P
-        }
+        private var logService: ILogService? = null
     }
 
     private val TAG = "ForegroundService"
@@ -53,6 +52,21 @@ class ForegroundService : Service() {
     private lateinit var windowManager: WindowManager
     private lateinit var mainParams: LayoutParams
     private var view: ViewGroup? = null
+    private var useRoot: Boolean = false
+
+    //region read logs
+    private val readLogCallback = object : ILogCallback.Stub() {
+        override fun onReadLine(line: String?) {
+            if (line!!.contains(plugin!!.config.applicationId)) {
+                Log.d(TAG, "onReadLine: $line")
+                if (plugin!!.config.ignoreNextCopy) {
+                    plugin!!.config.ignoreNextCopy = false
+                } else {
+                    mHandler.sendMessage(Message())
+                }
+            }
+        }
+    }
 
     class MyHandler(foregroundService: ForegroundService) : Handler() {
         private val mOuter: WeakReference<ForegroundService> =
@@ -62,11 +76,13 @@ class ForegroundService : Service() {
             mOuter.get().let {
                 Log.d("read_logs", it.toString())
                 it?.showFloatFocusView()
-//                it?.startActivity(ClipboardFocusActivity.getIntent(it))
             }
         }
     }
 
+    //endregion
+
+    //region float view
     override fun onCreate() {
         super.onCreate()
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
@@ -103,13 +119,61 @@ class ForegroundService : Service() {
         windowManager.removeView(view)
         view = null
     }
+    //endregion
+
+    //region Shizuku
+
+    private val onBinderReceivedListener = OnBinderReceivedListener {
+        Log.d(TAG, "Shizuku binderReceived")
+    }
+    private val onBinderDeadListener = OnBinderDeadListener {
+        Log.d(TAG, "Shizuku binderDead")
+    }
+    //endregion
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d(TAG, "onStartCommand")
+        logService?.stopReadLogs()
+        logService = null
+        useRoot = intent?.getBooleanExtra("useRoot", false) ?: false
         plugin = ClipboardListenerPlugin.instance
-        if (plugin != null) {
-            createNotify()
-            readLogByShizuku()
+        Shizuku.addBinderReceivedListenerSticky(onBinderReceivedListener)
+        Shizuku.addBinderDeadListener(onBinderDeadListener)
+        createNotify()
+        if (plugin == null) throw Exception("plugin instance is not init")
+        if (!useRoot) {
+            if (plugin!!.serviceConnection != null) {
+                Shizuku.unbindUserService(
+                    plugin!!.userServiceArgs!!,
+                    plugin!!.serviceConnection!!,
+                    true
+                )
+            }
+            if (plugin!!.serviceConnection == null) {
+                plugin!!.serviceConnection = object : ServiceConnection {
+                    override fun onServiceConnected(componentName: ComponentName, binder: IBinder) {
+                        Log.d(TAG, "onServiceConnected ${componentName.className}")
+                        plugin!!.listening = true
+                        notifyForeground(
+                            plugin!!.config.notifyContentTitle,
+                            plugin!!.config.notifyContentTextByShizuku
+                        )
+                        logService = ILogService.Stub.asInterface(binder)
+                        startReadLogs()
+                    }
+
+                    override fun onServiceDisconnected(componentName: ComponentName) {
+                        logService?.stopReadLogs()
+                        logService = null
+                        notifyForeground("Service disconnected", "LogService disconnected")
+                    }
+                }
+            }
+
+            Shizuku.bindUserService(plugin!!.userServiceArgs!!, plugin!!.serviceConnection!!)
+        } else {
+            logService = LogService()
+            startReadLogs()
         }
         return START_NOT_STICKY
     }
@@ -117,6 +181,38 @@ class ForegroundService : Service() {
     override fun onBind(intent: Intent): IBinder? {
         return null;
     }
+
+    private fun startReadLogs() {
+        if (logService == null) {
+            notifyForeground("Error", "LogService is null")
+            return
+        }
+        Log.d(TAG, "ready to read logs: start")
+        val t = Thread {
+            try {
+                Log.d(TAG, "startReadLogs: start")
+                logService!!.startReadLogs(readLogCallback, useRoot)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                Log.d(TAG, "startReadLogs: error ${e.message}")
+                notifyForeground("Error", "Clipboard listening stopped abnormally: ${e.message}")
+            }
+            plugin?.listening = false
+            Log.d(TAG, "startReadLogs: end")
+            notifyForeground("Warning", "Clipboard  listening end")
+        }
+        t.isDaemon = true
+        t.start()
+    }
+
+    override fun onDestroy() {
+//        super.onDestroy()
+        Log.d(TAG, "ForegroundService onDestroy $logService")
+        logService?.stopReadLogs()
+        logService = null
+        Shizuku.unbindUserService(plugin!!.userServiceArgs!!, plugin!!.serviceConnection, true)
+    }
+    //region notify
 
     private fun createNotify() {
         // 在 Android 8.0 及以上版本，需要创建通知渠道
@@ -131,61 +227,12 @@ class ForegroundService : Service() {
         ) as NotificationManager
         manger.notify(foregroundServiceNotificationId, notification)
         startForeground(foregroundServiceNotificationId, notification)
-        notifyForeground(plugin!!.config.shizukuNotifyContentText)
-    }
-
-    private fun readLogByShizuku() {
-        //Android 10以下才需要shizuku
-        if (!needShizuku()) {
-            return
-        }
-        val timeStamp: String =
-            SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US).format(Date())
-        val cmdStrArr = arrayOf(
-            "logcat",
-            "-T",
-            timeStamp,
-            "ClipboardService:E",
-            "*:S"
-        )
-        val t = Thread {
-            try {
-                val process = Shizuku.newProcess(cmdStrArr, null, null)
-                Log.d("read_logs", "start")
-                val bufferedReader = BufferedReader(InputStreamReader(process.inputStream))
-                plugin?.listening = true;
-                var line: String?
-                while (bufferedReader.readLine().also { line = it } != null) {
-                    line?.let { Log.d("read_logs", it) }
-                    if (line!!.contains(plugin!!.config.applicationId)) {
-                        if (plugin!!.config.ignoreNextCopy) {
-                            plugin!!.config.ignoreNextCopy = false
-                        } else {
-                            line?.let { Log.d("read_logs", "self log") }
-                            mHandler.sendMessage(Message())
-                        }
-                    }
-                }
-                notifyForeground("日志读取异常停止")
-                Log.d("read_logs", "finished")
-                plugin?.listening = false;
-            } catch (_: RemoteException) {
-                stopSelf()
-            } catch (e: Exception) {
-                plugin?.listening = false
-                notifyForeground("Shizuku服务异常停止：" + e.message)
-                e.printStackTrace()
-                e.message?.let { Log.e("read_logs", it) }
-            }
-        }
-        t.isDaemon = true
-        t.start()
     }
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val name: CharSequence = "前台通知"
-            val description = "前台通知服务，告知服务状态允许"
+            val name: CharSequence = "ServiceStatus"
+            val description = "Notify service running status"
             val importance = NotificationManager.IMPORTANCE_MIN
             val channel = NotificationChannel(foregroundServiceNotifyChannelId, name, importance)
             channel.description = description
@@ -206,26 +253,27 @@ class ForegroundService : Service() {
         }
 
         // 设置通知的标题、内容等
-        builder.setContentTitle(plugin!!.config.shizukuNotifyContentTitle)
+        builder.setContentTitle("Waiting to Running")
             .setSmallIcon(getAppIcon(applicationContext))
             .setOngoing(true)
             .setSound(null)
             .setContentIntent(createPendingIntent())
 //            .setBadgeIconType(NotificationCompat.BADGE_ICON_NONE)
-            .setContentText(plugin!!.config.shizukuNotifyContentText)
+            .setContentText("Waiting to Running Service")
         return builder.build()
     }
 
-    private fun notifyForeground(content: String) {
+    private fun notifyForeground(title: String, content: String) {
         val updatedBuilder: NotificationCompat.Builder =
             NotificationCompat.Builder(this, foregroundServiceNotifyChannelId)
                 .setSmallIcon(getAppIcon(applicationContext))
-                .setContentTitle(plugin!!.config.shizukuNotifyContentTitle)
+                .setContentTitle(plugin!!.config.notifyContentTitle)
                 .setOngoing(true)
                 .setSound(null)
                 .setContentIntent(createPendingIntent())
                 .setBadgeIconType(NotificationCompat.BADGE_ICON_NONE)
                 .setContentText(content)
+                .setContentTitle(title)
         val manger = getSystemService(
             NOTIFICATION_SERVICE
         ) as NotificationManager
@@ -256,4 +304,5 @@ class ForegroundService : Service() {
             PendingIntent.FLAG_IMMUTABLE
         )
     }
+    //endregion
 }

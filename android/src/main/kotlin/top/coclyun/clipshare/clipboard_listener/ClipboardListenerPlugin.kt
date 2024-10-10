@@ -7,6 +7,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
@@ -22,6 +23,9 @@ import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
 import rikka.shizuku.Shizuku
+import rikka.shizuku.Shizuku.UserServiceArgs
+import top.coclyun.clipshare.clipboard_listener.service.ForegroundService
+import java.io.DataOutputStream
 
 const val CHANNEL_NAME = "top.coclyun.clipshare/clipboard_listener"
 const val ON_CLIPBOARD_CHANGED = "onClipboardChanged"
@@ -44,6 +48,8 @@ class ClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
     val config: Config = Config()
     var mainActivity: Activity? = null
     var listening: Boolean = false
+    var userServiceArgs: UserServiceArgs? = null
+    var serviceConnection: ServiceConnection? = null
 
     companion object {
         @JvmStatic
@@ -55,6 +61,12 @@ class ClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
         channel = MethodChannel(flutterPluginBinding.binaryMessenger, CHANNEL_NAME)
         context = flutterPluginBinding.applicationContext
         config.applicationId = context.applicationInfo.packageName
+        userServiceArgs = UserServiceArgs(
+            android.content.ComponentName(
+                config.applicationId,
+                top.coclyun.clipshare.clipboard_listener.service.LogService::class.java.name
+            )
+        ).daemon(false).processNameSuffix("service")
         Log.d(TAG, "applicationId: ${config.applicationId}")
         Shizuku.addRequestPermissionResultListener(this);
         currentEnv = getCurrentEnvironment()
@@ -63,7 +75,6 @@ class ClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
         ClipboardListener.instance.addObserver(this)
         channel.setMethodCallHandler(this)
         Log.d(TAG, "currentEnv $currentEnv")
-        startListeningClipboard()
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
@@ -78,7 +89,19 @@ class ClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
             START_LISTENING -> {
                 val title = call.argument<String>("title")
                 val desc = call.argument<String>("desc")
-                result.success(startListeningClipboard(title, desc))
+                val envStr = call.argument<String>("env")
+                var env: EnvironmentType? = null
+                if (envStr != null) {
+                    try {
+                        env = EnvironmentType.valueOf(envStr)
+                        if (env != EnvironmentType.shizuku && env != EnvironmentType.root) {
+                            env = null
+                        }
+                    } catch (_: Exception) {
+
+                    }
+                }
+                result.success(startListeningClipboard(title, desc, env))
             }
 
             CHECK_IS_RUNNING -> result.success(listening)
@@ -106,7 +129,7 @@ class ClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
                     }
 
                     EnvironmentType.root -> {
-                        //todo
+                        checkRootPermission()
                     }
 
                     else -> {}
@@ -172,17 +195,30 @@ class ClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
         )
     }
 
-    private fun startListeningClipboard(title: String? = null, desc: String? = null): Boolean {
-        return when (currentEnv) {
-            EnvironmentType.shizuku -> startListeningByShizuku(title, desc)
-
-            EnvironmentType.root -> false
-            EnvironmentType.androidPre10 -> true
-            null -> false
+    private fun startListeningClipboard(
+        title: String? = null,
+        desc: String? = null,
+        env: EnvironmentType? = null
+    ): Boolean {
+        if (listening) return false
+        if (env == EnvironmentType.root) {
+            if (!checkRootPermission()) {
+                return false
+            }
+        } else if (env == EnvironmentType.shizuku) {
+            if (!checkShizukuPermission()) {
+                return false
+            }
         }
+        if (currentEnv == EnvironmentType.androidPre10) return true
+        return startListening(title, desc, env)
     }
 
-    private fun startListeningByShizuku(title: String? = null, desc: String? = null): Boolean {
+    private fun startListening(
+        title: String? = null,
+        desc: String? = null,
+        env: EnvironmentType?
+    ): Boolean {
         try {
             val running = isServiceRunning(
                 context,
@@ -190,14 +226,18 @@ class ClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
             )
             Log.d(TAG, "service is running: $running")
             val serviceIntent = Intent(context, ForegroundService::class.java)
+            serviceIntent.putExtra(
+                "useRoot",
+                (env ?: currentEnv) == EnvironmentType.root
+            )
             if (running) {
                 context.stopService(serviceIntent)
             }
             title?.let {
-                config.shizukuNotifyContentTitle = it
+                config.notifyContentTitle = it
             }
             desc?.let {
-                config.shizukuNotifyContentText = it
+                config.notifyContentTextByShizuku = it
             }
             context.startService(serviceIntent)
             return true
@@ -280,8 +320,17 @@ class ClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
     }
 
     private fun checkRootPermission(): Boolean {
-        //todo
-        return false
+        return try {
+            val process = Runtime.getRuntime().exec("su")
+            val os = DataOutputStream(process.outputStream)
+            os.writeBytes("exit\n")
+            os.flush()
+            process.waitFor()
+            process.exitValue() == 0
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
     }
 
     private fun checkAndroidPre10(): Boolean {

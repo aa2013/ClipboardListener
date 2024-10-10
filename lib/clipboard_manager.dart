@@ -64,8 +64,15 @@ class ClipboardManager {
     _listeners.remove(listener);
   }
 
-  ///start listening clipboard change (only Android)
-  Future<bool> startListening([String? title, String? desc]) {
+  ///start listening clipboard change event
+  ///[title] notification title text
+  ///[desc] notification description text
+  ///[startEnv] the listening mode you want to enable.The options are either a or b. If null, it will automatically select based on the current environment.
+  Future<bool> startListening({
+    String? title,
+    String? desc,
+    EnvironmentType? startEnv,
+  }) {
     var args = <String, dynamic>{};
     if (title != null) {
       args["title"] = title;
@@ -73,14 +80,16 @@ class ClipboardManager {
     if (desc != null) {
       args["desc"] = desc;
     }
+    if (startEnv != null) {
+      args["env"] = startEnv.name;
+    }
     return _channel
         .invokeMethod<bool>(kStartListening, args.isEmpty ? null : args)
         .then((value) => value ?? false);
   }
 
-  ///check listener running status (only Android)
+  ///check listener running status
   Future<bool> checkIsRunning() {
-    if (!Platform.isAndroid) return Future.value(false);
     return _channel
         .invokeMethod<bool>(kCheckIsRunning)
         .then((value) => value ?? false);
@@ -131,7 +140,7 @@ class ClipboardManager {
 
   ///getCurrentEnvironment (only Android)
   Future<EnvironmentType> getCurrentEnvironment() async {
-    if (Platform.isAndroid) {
+    if (!Platform.isAndroid) {
       return EnvironmentType.none;
     }
     for (var env in EnvironmentType.values) {

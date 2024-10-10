@@ -34,10 +34,6 @@ class _MyAppState extends State<MyApp> with ClipboardListener {
           this.isGranted = env != EnvironmentType.none;
         });
       });
-    } else if (Platform.isWindows) {
-      clipboardManager.startListening().then((res){
-        print("startListening $res");
-      });
     }
   }
 
@@ -65,30 +61,43 @@ class _MyAppState extends State<MyApp> with ClipboardListener {
               child: Column(
                 children: [
                   Text('current environment: $env, status: $isGranted'),
-                  Row(
-                    children: [
-                      GestureDetector(
-                        onTap: isGranted
-                            ? null
-                            : () {
-                                clipboardManager
-                                    .requestPermission(EnvironmentType.shizuku);
-                              },
-                        child: const Chip(label: Text("Request Shizuka")),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 10, right: 10),
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          GestureDetector(
+                            onTap: () {
+                              clipboardManager
+                                  .requestPermission(EnvironmentType.shizuku);
+                            },
+                            child: const Chip(label: Text("Request Shizuka")),
+                          ),
+                          const SizedBox(
+                            width: 10,
+                          ),
+                          GestureDetector(
+                            onTap: () {
+                              clipboardManager
+                                  .requestPermission(EnvironmentType.root);
+                            },
+                            child: const Chip(label: Text("Request Root")),
+                          ),
+                          const SizedBox(
+                            width: 10,
+                          ),
+                          GestureDetector(
+                            onTap: () {
+                              clipboardManager.startListening().then((res) {
+                                print("startListening $res");
+                              });
+                            },
+                            child: const Chip(label: Text("Start listening")),
+                          ),
+                        ],
                       ),
-                      const SizedBox(
-                        width: 10,
-                      ),
-                      GestureDetector(
-                        onTap: isGranted
-                            ? null
-                            : () {
-                                clipboardManager
-                                    .requestPermission(EnvironmentType.root);
-                              },
-                        child: const Chip(label: Text("Request Root")),
-                      ),
-                    ],
+                    ),
                   ),
                 ],
               ),

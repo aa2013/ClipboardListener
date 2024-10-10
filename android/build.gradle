@@ -49,8 +49,9 @@ android {
     }
 
     dependencies {
-        api "dev.rikka.shizuku:api:13.1.0"
-        api "dev.rikka.shizuku:provider:13.1.0"
+        def shizuku_version = "13.1.5"
+        api "dev.rikka.shizuku:api:$shizuku_version"
+        api "dev.rikka.shizuku:provider:$shizuku_version"
         implementation 'androidx.appcompat:appcompat:1.6.1'
         testImplementation("org.jetbrains.kotlin:kotlin-test")
         testImplementation("org.mockito:mockito-core:5.0.0")
@@ -66,6 +67,9 @@ android {
                showStandardStreams = true
             }
         }
+    }
+    buildFeatures {
+        aidl = true
     }
 }
 
