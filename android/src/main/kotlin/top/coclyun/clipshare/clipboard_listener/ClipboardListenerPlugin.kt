@@ -46,7 +46,7 @@ class ClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
     private lateinit var channel: MethodChannel
     private lateinit var context: Context
     private val requestShizukuCode = 5001
-    private var currentEnv: EnvironmentType? = null
+    var currentEnv: EnvironmentType? = null
     val config: Config = Config()
     var mainActivity: Activity? = null
     var listening: Boolean = false

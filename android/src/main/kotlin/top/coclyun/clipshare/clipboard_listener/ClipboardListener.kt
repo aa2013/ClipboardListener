@@ -58,8 +58,9 @@ open class ClipboardListener(
     }
 
     fun onClipboardChanged() {
-        if (!plugin.listening) {
-            return;
+        val env = plugin.currentEnv;
+        if (!plugin.listening && (env == EnvironmentType.shizuku || env == EnvironmentType.root)) {
+            return
         }
         try {
             val item = cm!!.primaryClip!!.getItemAt(0)
