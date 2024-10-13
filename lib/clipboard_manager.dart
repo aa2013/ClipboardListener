@@ -44,6 +44,8 @@ const kCheckIsRunning = "checkIsRunning";
 const kCheckPermission = "checkPermission";
 const kRequestPermission = "requestPermission";
 const kGetSelectedFiles = "getSelectedFiles";
+const kStopListening = "stopListening";
+const kGetShizukuversion = "getShizukuVersion";
 const kCopy = "copy";
 
 class ClipboardManager {
@@ -82,10 +84,25 @@ class ClipboardManager {
     }
     if (startEnv != null) {
       args["env"] = startEnv.name;
+      if (startEnv == EnvironmentType.none) {
+        return Future(() => false);
+      }
     }
     return _channel
         .invokeMethod<bool>(kStartListening, args.isEmpty ? null : args)
         .then((value) => value ?? false);
+  }
+
+  /// stop listening clipboard
+  void stopListening() {
+    //todo windows and androidPre10
+    _channel.invokeMethod(kStopListening);
+  }
+
+  ///get the version for Shizuku. (Only Android)
+  Future<int?> getShizukuVersion() {
+    if (!Platform.isAndroid) return Future(() => null);
+    return _channel.invokeMethod<int>(kGetShizukuversion);
   }
 
   ///check listener running status

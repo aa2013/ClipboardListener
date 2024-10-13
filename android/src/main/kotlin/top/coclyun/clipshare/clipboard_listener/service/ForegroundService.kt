@@ -173,6 +173,11 @@ class ForegroundService : Service() {
             Shizuku.bindUserService(plugin!!.userServiceArgs!!, plugin!!.serviceConnection!!)
         } else {
             logService = LogService()
+            notifyForeground(
+                plugin!!.config.notifyContentTitle,
+                plugin!!.config.notifyContentTextByRoot
+            )
+            plugin!!.listening = true
             startReadLogs()
         }
         return START_NOT_STICKY
@@ -190,7 +195,7 @@ class ForegroundService : Service() {
         Log.d(TAG, "ready to read logs: start")
         val t = Thread {
             try {
-                Log.d(TAG, "startReadLogs: start")
+                Log.d(TAG, "startReadLogs, useRoot $useRoot")
                 logService!!.startReadLogs(readLogCallback, useRoot)
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -199,7 +204,7 @@ class ForegroundService : Service() {
             }
             plugin?.listening = false
             Log.d(TAG, "startReadLogs: end")
-            notifyForeground("Warning", "Clipboard  listening end")
+            notifyForeground("Warning", "Clipboard listening end")
         }
         t.isDaemon = true
         t.start()
@@ -210,6 +215,7 @@ class ForegroundService : Service() {
         Log.d(TAG, "ForegroundService onDestroy $logService")
         logService?.stopReadLogs()
         logService = null
+        plugin!!.listening = false
         Shizuku.unbindUserService(plugin!!.userServiceArgs!!, plugin!!.serviceConnection, true)
     }
     //region notify

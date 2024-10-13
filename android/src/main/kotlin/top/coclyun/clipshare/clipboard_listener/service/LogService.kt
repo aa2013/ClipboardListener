@@ -19,7 +19,7 @@ open class LogService : ILogService.Stub() {
         val res = Array(commands.size) { "" }
         for (i in commands.indices) {
             if (commands[i].contains(" ")) {
-                res[i] = "'" + commands[i] + "'" // Ìí¼ÓÒýºÅ
+                res[i] = "'" + commands[i] + "'" // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
             } else {
                 res[i] = commands[i]
             }

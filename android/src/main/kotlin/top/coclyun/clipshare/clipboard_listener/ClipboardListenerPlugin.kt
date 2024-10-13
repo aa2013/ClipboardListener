@@ -31,6 +31,8 @@ const val CHANNEL_NAME = "top.coclyun.clipshare/clipboard_listener"
 const val ON_CLIPBOARD_CHANGED = "onClipboardChanged"
 const val ON_PERMISSION_STATUS_CHANGED = "onPermissionStatusChanged"
 const val START_LISTENING = "startListening"
+const val STOP_LISTENING = "stopListening"
+const val GET_SHIZUKUVERSION = "getShizukuVersion"
 const val CHECK_IS_RUNNING = "checkIsRunning"
 const val CHECK_PERMISSION = "checkPermission"
 const val REQUEST_PERMISSION = "requestPermission"
@@ -94,8 +96,9 @@ class ClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
                 if (envStr != null) {
                     try {
                         env = EnvironmentType.valueOf(envStr)
-                        if (env != EnvironmentType.shizuku && env != EnvironmentType.root) {
-                            env = null
+                        if (env == EnvironmentType.androidPre10) {
+                            result.success(true)
+                            return
                         }
                     } catch (_: Exception) {
 
@@ -104,7 +107,15 @@ class ClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
                 result.success(startListeningClipboard(title, desc, env))
             }
 
-            CHECK_IS_RUNNING -> result.success(listening)
+            STOP_LISTENING -> stopListening()
+            GET_SHIZUKUVERSION -> result.success(Shizuku.getVersion())
+            CHECK_IS_RUNNING -> {
+                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+                    result.success(true)
+                }
+                result.success(listening)
+            }
+
             CHECK_PERMISSION -> {
                 val envName = call.argument<String>("env")
                 try {
@@ -134,6 +145,7 @@ class ClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
 
                     else -> {}
                 }
+                result.success(null)
             }
 
             COPY ->
@@ -245,6 +257,12 @@ class ClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
             e.printStackTrace()
             return false
         }
+    }
+
+    private fun stopListening() {
+        val serviceIntent = Intent(context, ForegroundService::class.java)
+        listening = false
+        context.stopService(serviceIntent)
     }
 
     private fun onPermissionStatusChanged(env: EnvironmentType, isGranted: Boolean) {
