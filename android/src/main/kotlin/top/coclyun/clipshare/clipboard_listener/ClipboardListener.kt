@@ -16,7 +16,10 @@ import java.util.Date
 import java.util.Locale
 
 
-open class ClipboardListener(private var context: Context) {
+open class ClipboardListener(
+    private var plugin: ClipboardListenerPlugin,
+    private var context: Context
+) {
     interface ClipboardObserver {
         fun onClipboardChanged(type: ClipboardContentType, content: String)
     }
@@ -24,8 +27,8 @@ open class ClipboardListener(private var context: Context) {
     companion object {
         @SuppressLint("StaticFieldLeak")
         private var _instance: ClipboardListener? = null
-        fun init(context: Context): ClipboardListener {
-            _instance = ClipboardListener(context)
+        fun init(plugin: ClipboardListenerPlugin, context: Context): ClipboardListener {
+            _instance = ClipboardListener(plugin, context)
             return _instance!!
         }
 
@@ -55,6 +58,9 @@ open class ClipboardListener(private var context: Context) {
     }
 
     fun onClipboardChanged() {
+        if (!plugin.listening) {
+            return;
+        }
         try {
             val item = cm!!.primaryClip!!.getItemAt(0)
             val description = cm!!.primaryClipDescription!!

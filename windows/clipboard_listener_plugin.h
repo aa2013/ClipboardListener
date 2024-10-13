@@ -17,6 +17,7 @@ namespace clipboard_listener {
 		static constexpr std::string_view kCheckIsRunning = "checkIsRunning";
 		static constexpr std::string_view kCopy = "copy";
 		static constexpr std::string_view kGetSelectedFiles = "getSelectedFiles";
+		static constexpr std::string_view kStopListening = "stopListening";
 		ClipboardListenerPlugin(flutter::PluginRegistrarWindows* registrar);
 
 		virtual ~ClipboardListenerPlugin();
@@ -38,6 +39,7 @@ namespace clipboard_listener {
 		flutter::PluginRegistrarWindows* registrar_;
 		bool running = false;
 		bool ignoreNextCopy = false;
+		HWND listeningHiddenWindowHWND;
 		void StartListening();
 		void OnClipboardChanged();
 		std::wstring* GetClipboardDataCustom(std::string& type, int retry = 0);

@@ -53,7 +53,7 @@ namespace clipboard_listener {
 	}
 
 	ClipboardListenerPlugin::ClipboardListenerPlugin(flutter::PluginRegistrarWindows* registrar)
-		:registrar_(registrar){
+		:registrar_(registrar) {
 		instance = this;
 
 	}
@@ -95,18 +95,26 @@ namespace clipboard_listener {
 			map[flutter::EncodableValue("succeed")] = flutter::EncodableValue(succeed);
 			result->Success(flutter::EncodableValue(map));
 		}
+		else if (method_name.compare(std::string(ClipboardListenerPlugin::kStopListening)) == 0) {
+			DestroyWindow(listeningHiddenWindowHWND);
+			running = false;
+		}
 		else {
 			result->NotImplemented();
 		}
 	}
 
 	void ClipboardListenerPlugin::StartListening() {
+		if (running) {
+			return;
+		}
 		std::thread([&]() {
 			// 创建隐藏窗口并启动消息循环
 			HINSTANCE hInstance = GetModuleHandle(nullptr);
 			auto window = new ListeningHiddenWindow(hInstance, [&]() {
 				this->OnClipboardChanged();
 				});
+			listeningHiddenWindowHWND = window->GetHWND();
 			this->running = true;
 			window->RunMessageLoop();
 			}).detach();

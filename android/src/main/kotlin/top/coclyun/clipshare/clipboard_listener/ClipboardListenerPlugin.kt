@@ -73,7 +73,7 @@ class ClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
         Shizuku.addRequestPermissionResultListener(this);
         currentEnv = getCurrentEnvironment()
         instance = this
-        ClipboardListener.init(context)
+        ClipboardListener.init(this, context)
         ClipboardListener.instance.addObserver(this)
         channel.setMethodCallHandler(this)
         Log.d(TAG, "currentEnv $currentEnv")

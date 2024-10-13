@@ -50,21 +50,20 @@ class _MyAppState extends State<MyApp> with ClipboardListener {
         appBar: AppBar(
           title: const Text('Example'),
         ),
-        body: Column(
-          children: [
-            const SizedBox(
-              height: 10,
-            ),
-            //region Android
-            Visibility(
-              visible: Platform.isAndroid,
-              child: Column(
-                children: [
-                  Text('current environment: $env, status: $isGranted'),
-                  Padding(
-                    padding: const EdgeInsets.only(left: 10, right: 10),
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
+        body: Builder(builder: (BuildContext context) {
+          return Column(
+            children: [
+              const SizedBox(
+                height: 10,
+              ),
+              //region Android
+              Visibility(
+                visible: Platform.isAndroid,
+                child: Column(
+                  children: [
+                    Text('current environment: $env, status: $isGranted'),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 10, right: 10),
                       child: Row(
                         children: [
                           GestureDetector(
@@ -87,29 +86,98 @@ class _MyAppState extends State<MyApp> with ClipboardListener {
                           const SizedBox(
                             width: 10,
                           ),
+                        ],
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 10, right: 10),
+                      child: Row(
+                        children: [
                           GestureDetector(
                             onTap: () {
-                              clipboardManager.startListening().then((res) {
-                                print("startListening $res");
+                              clipboardManager
+                                  .startListening(
+                                      startEnv: EnvironmentType.shizuku)
+                                  .then((res) {
+                                if (res) {
+                                  showSnackBarSuc(
+                                    context,
+                                    "Listening started successfully",
+                                  );
+                                } else {
+                                  showSnackBarErr(
+                                    context,
+                                    "Listening failed to start",
+                                  );
+                                }
                               });
                             },
-                            child: const Chip(label: Text("Start listening")),
+                            child: const Chip(
+                                label: Text("Start listening by Shizuku")),
+                          ),
+                          const SizedBox(
+                            width: 10,
+                          ),
+                          GestureDetector(
+                            onTap: () {
+                              clipboardManager
+                                  .startListening(
+                                      startEnv: EnvironmentType.root)
+                                  .then((res) {
+                                if (res) {
+                                  showSnackBarSuc(
+                                    context,
+                                    "Listening started successfully",
+                                  );
+                                } else {
+                                  showSnackBarErr(
+                                    context,
+                                    "Listening failed to start",
+                                  );
+                                }
+                              });
+                            },
+                            child: const Chip(
+                                label: Text("Start listening by Root")),
+                          ),
+                          const SizedBox(
+                            width: 10,
                           ),
                         ],
                       ),
                     ),
-                  ),
-                ],
+                    Padding(
+                      padding: const EdgeInsets.only(left: 10, right: 10),
+                      child: Row(
+                        children: [
+                          GestureDetector(
+                            onTap: () {
+                              clipboardManager.stopListening();
+                              showSnackBarSuc(
+                                context,
+                                "Listening stopped",
+                              );
+                            },
+                            child: const Chip(label: Text("Stop listening")),
+                          ),
+                          const SizedBox(
+                            width: 10,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            //endregion
-            Text('type: $type\n\ncontent:\n$content\n\n'),
-            const SizedBox(
-              height: 10,
-            ),
-            const TextField()
-          ],
-        ),
+              //endregion
+              Text('type: $type\n\ncontent:\n$content\n\n'),
+              const SizedBox(
+                height: 10,
+              ),
+              const TextField()
+            ],
+          );
+        }),
       ),
     );
   }
@@ -129,5 +197,22 @@ class _MyAppState extends State<MyApp> with ClipboardListener {
       env = environment.name;
       this.isGranted = isGranted;
     });
+  }
+
+  void showSnackBar(BuildContext context, String text, Color color) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(text),
+        backgroundColor: color,
+      ),
+    );
+  }
+
+  void showSnackBarSuc(BuildContext context, String text) {
+    showSnackBar(context, text, Colors.lightBlue);
+  }
+
+  void showSnackBarErr(BuildContext context, String text) {
+    showSnackBar(context, text, Colors.redAccent);
   }
 }

@@ -94,9 +94,8 @@ class ClipboardManager {
   }
 
   /// stop listening clipboard
-  void stopListening() {
-    //todo windows and androidPre10
-    _channel.invokeMethod(kStopListening);
+  Future<void> stopListening() {
+   return _channel.invokeMethod(kStopListening);
   }
 
   ///get the version for Shizuku. (Only Android)

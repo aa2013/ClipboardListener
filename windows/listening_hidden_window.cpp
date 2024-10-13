@@ -16,6 +16,9 @@ namespace {
 
 		void RunMessageLoop();
 
+		HWND GetHWND() {
+			return hwnd_;
+		}
 	private:
 		HWND hwnd_;
 		HWND hWndNextViewer_;
