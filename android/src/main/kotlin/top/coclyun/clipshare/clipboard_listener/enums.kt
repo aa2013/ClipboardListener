@@ -12,7 +12,7 @@ enum class ClipboardContentType {
     companion object {
         fun parse(name: String): ClipboardContentType {
             for (v in values()) {
-                if (v.name.uppercase() == name.uppercase()) {
+                if (v.name.lowercase() == name.lowercase()) {
                     return v
                 }
             }

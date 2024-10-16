@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math';
 
 import 'package:clipboard_listener/clipboard_manager.dart';
 import 'package:clipboard_listener/enums.dart';
@@ -174,7 +175,16 @@ class _MyAppState extends State<MyApp> with ClipboardListener {
               const SizedBox(
                 height: 10,
               ),
-              const TextField()
+              const TextField(),
+              const SizedBox(
+                height: 10,
+              ),
+              GestureDetector(
+                onTap: () {
+                  clipboardManager.copy(ClipboardContentType.text, Random().nextInt(99999).toString());
+                },
+                child: const Chip(label: Text("Copy Random Data")),
+              )
             ],
           );
         }),

@@ -159,6 +159,7 @@ class ClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
                         ClipboardManager::class.java
                     ) as ClipboardManager
                     val contentType = ClipboardContentType.parse(type!!)
+                    Log.d(TAG, "onMethodCall: Copy $contentType")
                     when (contentType) {
                         ClipboardContentType.Text -> {
                             // 创建一个剪贴板数据

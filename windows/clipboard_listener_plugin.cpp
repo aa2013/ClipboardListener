@@ -310,7 +310,7 @@ namespace clipboard_listener {
 		std::wstring data = Utf16FromUtf8(content).c_str();
 		HGLOBAL hClipboardData = nullptr;
 		//文本类型
-		if (type == "Text")
+		if (type == "text")
 		{
 			// 分配全局内存，用于存放文本
 			hClipboardData = GlobalAlloc(GMEM_MOVEABLE, (wcslen(data.c_str()) + 1) * sizeof(wchar_t));
@@ -334,7 +334,7 @@ namespace clipboard_listener {
 			// 将全局内存放入剪贴板
 			SetClipboardData(CF_UNICODETEXT, hClipboardData);
 		}
-		if (type == "Image")
+		if (type == "image")
 		{
 			CImage image;
 			if (FAILED(image.Load(std::wstring(content.begin(), content.end()).c_str()))) {
