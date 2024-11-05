@@ -3,11 +3,20 @@ import 'dart:math';
 
 import 'package:clipboard_listener/clipboard_manager.dart';
 import 'package:clipboard_listener/enums.dart';
+import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:hotkey_manager/hotkey_manager.dart';
 import 'package:permission_handler/permission_handler.dart';
 
-void main() {
-  runApp(const MyApp());
+void main(List<String> args) {
+  var isMultiWindow = args.firstOrNull == 'multi_window';
+  print(isMultiWindow);
+  if (isMultiWindow) {
+    runApp(MultiWindow());
+  } else {
+    runApp(const MyApp());
+  }
 }
 
 class MyApp extends StatefulWidget {
@@ -27,6 +36,10 @@ class _MyAppState extends State<MyApp> with ClipboardListener {
   void initState() {
     super.initState();
     clipboardManager.addListener(this);
+    if (Platform.isWindows) {
+      initHotKey();
+      initMultiWindowEvent();
+    }
     if (Platform.isAndroid) {
       Permission.systemAlertWindow.request();
       clipboardManager.getCurrentEnvironment().then((env) {
@@ -181,7 +194,8 @@ class _MyAppState extends State<MyApp> with ClipboardListener {
               ),
               GestureDetector(
                 onTap: () {
-                  clipboardManager.copy(ClipboardContentType.text, Random().nextInt(99999).toString());
+                  clipboardManager.copy(ClipboardContentType.text,
+                      Random().nextInt(99999).toString());
                 },
                 child: const Chip(label: Text("Copy Random Data")),
               )
@@ -224,5 +238,63 @@ class _MyAppState extends State<MyApp> with ClipboardListener {
 
   void showSnackBarErr(BuildContext context, String text) {
     showSnackBar(context, text, Colors.redAccent);
+  }
+
+  Future<void> initHotKey() async {
+    await hotKeyManager.unregisterAll();
+    final key = HotKey(
+      key: PhysicalKeyboardKey.keyH,
+      modifiers: [HotKeyModifier.control, HotKeyModifier.alt],
+      scope: HotKeyScope.system,
+    );
+    await hotKeyManager.register(
+      key,
+      keyDownHandler: (hotKey) async {
+        await clipboardManager.storeCurrentWindowHwnd();
+        //createWindow里面的参数必须传
+        final window = await DesktopMultiWindow.createWindow('{}');
+        window
+          ..setFrame(const Offset(500, 500) & const Size(355.0, 630.0))
+          ..setTitle('Window')
+          ..show();
+      },
+    );
+  }
+
+  void initMultiWindowEvent() {
+    DesktopMultiWindow.setMethodHandler((
+      MethodCall call,
+      int fromWindowId,
+    ) {
+      Clipboard.setData(ClipboardData(text: DateTime.now().toString()));
+      clipboardManager.pasteToPreviousWindow();
+      return Future.value();
+    });
+  }
+}
+
+class MultiWindow extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      home: Scaffold(
+        appBar: AppBar(
+          title: const Text("MultiWindow"),
+        ),
+        body: Column(
+          children: [
+            TextButton(
+                onPressed: () {
+                  DesktopMultiWindow.invokeMethod(
+                    0,
+                    "methodName",
+                    "{}",
+                  );
+                },
+                child: const Text("click me"))
+          ],
+        ),
+      ),
+    );
   }
 }

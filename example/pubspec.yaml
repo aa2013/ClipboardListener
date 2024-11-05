@@ -17,7 +17,9 @@ dependencies:
   flutter:
     sdk: flutter
   permission_handler: ^11.3.1
-
+  hotkey_manager: ^0.2.2
+  # 多窗口
+  desktop_multi_window: ^0.2.0
   clipboard_listener:
     # When depending on this package from a real application you should use:
     #   clipboard_listener: ^x.y.z

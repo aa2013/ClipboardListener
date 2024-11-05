@@ -16,8 +16,10 @@ namespace clipboard_listener {
 		static constexpr std::string_view kStartListening = "startListening"; 
 		static constexpr std::string_view kCheckIsRunning = "checkIsRunning";
 		static constexpr std::string_view kCopy = "copy";
-		static constexpr std::string_view kGetSelectedFiles = "getSelectedFiles";
+		static constexpr std::string_view kGetSelectedFiles = "getSelectedFiles"; 
 		static constexpr std::string_view kStopListening = "stopListening";
+		static constexpr std::string_view kStoreCurrentWindowHwnd = "storeCurrentWindowHwnd";
+		static constexpr std::string_view kPasteToPreviousWindow = "pasteToPreviousWindow";
 		ClipboardListenerPlugin(flutter::PluginRegistrarWindows* registrar);
 
 		virtual ~ClipboardListenerPlugin();
@@ -35,6 +37,7 @@ namespace clipboard_listener {
 		std::string GetCurrentTimeWithMilliseconds();
 	private:
 		static ClipboardListenerPlugin* instance;
+		HWND previousWindowHwnd;
 		std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> channel_;
 		flutter::PluginRegistrarWindows* registrar_;
 		bool running = false;

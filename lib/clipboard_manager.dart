@@ -46,6 +46,8 @@ const kRequestPermission = "requestPermission";
 const kGetSelectedFiles = "getSelectedFiles";
 const kStopListening = "stopListening";
 const kGetShizukuversion = "getShizukuVersion";
+const kStoreCurrentWindowHwnd = "storeCurrentWindowHwnd";
+const kPasteToPreviousWindow = "pasteToPreviousWindow";
 const kCopy = "copy";
 
 class ClipboardManager {
@@ -95,7 +97,7 @@ class ClipboardManager {
 
   /// stop listening clipboard
   Future<void> stopListening() {
-   return _channel.invokeMethod(kStopListening);
+    return _channel.invokeMethod(kStopListening);
   }
 
   ///get the version for Shizuku. (Only Android)
@@ -152,6 +154,24 @@ class ClipboardManager {
     return _channel
         .invokeMethod<bool>(kCopy, args)
         .then((value) => value ?? false);
+  }
+
+  ///Save the hwnd of the current window and use it in conjunction with [pasteToPreviousWindow] method
+  Future<void> storeCurrentWindowHwnd() {
+    if (!Platform.isWindows) return Future.value();
+    return _channel.invokeMethod(kStoreCurrentWindowHwnd);
+  }
+
+  ///send Ctrl + V to previous Window
+  ///Ensure [storeCurrentWindowHwnd] is called before pasting clipboard data into the previous window.
+  ///[keyDelayMs] The interval duration of each key, if the duration is too short, the combination key may not work properly
+  Future<void> pasteToPreviousWindow([int keyDelayMs = 100]) {
+    if (!Platform.isWindows) return Future.value();
+    if (keyDelayMs < 0) {
+      throw Exception("KeyDelayMs cannot be less than 0");
+    }
+    final args = {"keyDelayMs": keyDelayMs};
+    return _channel.invokeMethod(kPasteToPreviousWindow, args);
   }
 
   ///getCurrentEnvironment (only Android)

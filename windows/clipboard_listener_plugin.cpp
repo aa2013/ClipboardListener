@@ -28,9 +28,43 @@
 #include <atlbase.h> // CComPtr
 #pragma warning(disable : 4334)  // 禁用警告：32 位移位的结果被隐式转换为 64 位(是否希望进行 64 位移位?) 
 #pragma warning(disable : 4996)  // 禁用废弃警告
+#pragma warning(disable : 4244)  // 禁用警告：参数从 UINT 转为 BYTE 可能丢失数据
 namespace fs = std::filesystem;
 typedef unsigned char uchar;
+void down(BYTE vk)
+{
+	keybd_event(vk, 0, KEYEVENTF_KEYUP, 0);
+}
+void up(BYTE vk)
+{
+	keybd_event(vk, 0, KEYEVENTF_KEYUP, 0);
+}
+void press(BYTE vk)
+{
+	down(vk);
+	up(vk);
+}
+//模拟Ctrl+V
+void ctrl_v()
+{
+	down(VK_CONTROL);//按下Ctrl键
+	press(0x56);//按下V键，并放开
+	up(VK_CONTROL);//放开V键
+}
+void GetWindowInfo(HWND hwnd) {
+	// 获取窗口标题
+	const int titleLength = 256;
+	wchar_t title[titleLength];
+	GetWindowText(hwnd, title, titleLength);
 
+	// 获取窗口的进程 ID
+	DWORD processId;
+	GetWindowThreadProcessId(hwnd, &processId);
+
+	// 打印信息
+	std::wcout << L"窗口标题: " << title << std::endl;
+	std::wcout << L"进程 ID: " << processId << std::endl;
+}
 namespace clipboard_listener {
 
 	// static
@@ -65,7 +99,7 @@ namespace clipboard_listener {
 		const flutter::MethodCall <flutter::EncodableValue>& method_call,
 		std::unique_ptr <flutter::MethodResult<flutter::EncodableValue>> result) {
 		auto method_name = method_call.method_name();
-		if (method_name.compare(std::string(ClipboardListenerPlugin::kStartListening)) == 0) {
+		if (0 == method_name.compare(std::string(ClipboardListenerPlugin::kStartListening))) {
 			try {
 				StartListening();
 				result->Success(flutter::EncodableValue(true));
@@ -75,10 +109,10 @@ namespace clipboard_listener {
 				result->Success(flutter::EncodableValue(false));
 			}
 		}
-		else if (method_name.compare(std::string(ClipboardListenerPlugin::kCheckIsRunning)) == 0) {
+		else if (0 == method_name.compare(std::string(ClipboardListenerPlugin::kCheckIsRunning))) {
 			result->Success(flutter::EncodableValue(ClipboardListenerPlugin::running));
 		}
-		else if (method_name.compare(std::string(ClipboardListenerPlugin::kCopy)) == 0) {
+		else if (0 == method_name.compare(std::string(ClipboardListenerPlugin::kCopy))) {
 			ignoreNextCopy = true;
 			auto* arguments = std::get_if<flutter::EncodableMap>(method_call.arguments());
 			auto type = std::get<std::string>(arguments->at(flutter::EncodableValue("type")));
@@ -86,7 +120,7 @@ namespace clipboard_listener {
 			bool res = CopyData(type, content);
 			result->Success(flutter::EncodableValue(res));
 		}
-		else if (method_name.compare(std::string(ClipboardListenerPlugin::kGetSelectedFiles)) == 0) {
+		else if (0 == method_name.compare(std::string(ClipboardListenerPlugin::kGetSelectedFiles))) {
 			std::string fileList;
 			bool succeed = GetSelectedFiles(fileList);
 			// 构建要传递的参数
@@ -95,9 +129,30 @@ namespace clipboard_listener {
 			map[flutter::EncodableValue("succeed")] = flutter::EncodableValue(succeed);
 			result->Success(flutter::EncodableValue(map));
 		}
-		else if (method_name.compare(std::string(ClipboardListenerPlugin::kStopListening)) == 0) {
+		else if (0 == method_name.compare(std::string(ClipboardListenerPlugin::kStopListening))) {
 			DestroyWindow(listeningHiddenWindowHWND);
 			running = false;
+			result->Success();
+		}
+		else if (0 == method_name.compare(std::string(ClipboardListenerPlugin::kStoreCurrentWindowHwnd))) {
+			this->previousWindowHwnd = GetForegroundWindow();
+			GetWindowInfo(this->previousWindowHwnd);
+			result->Success();
+		}
+		else if (0 == method_name.compare(std::string(ClipboardListenerPlugin::kPasteToPreviousWindow))) {
+			if (this->previousWindowHwnd) {
+				auto* arguments = std::get_if<flutter::EncodableMap>(method_call.arguments());
+				auto keyDelayMs= arguments->at(flutter::EncodableValue("keyDelayMs")).LongValue();
+				SetForegroundWindow(this->previousWindowHwnd); 
+				// 按下组合键
+				keybd_event(VK_CONTROL, MapVirtualKey(VK_CONTROL, 0), 0, 0);
+				Sleep(keyDelayMs);
+				::SendMessage(this->previousWindowHwnd, WM_KEYDOWN, 0x56, 0);
+				Sleep(keyDelayMs);
+				::SendMessage(this->previousWindowHwnd, WM_KEYUP, 0x56, 0);
+				keybd_event(VK_CONTROL, MapVirtualKey(VK_CONTROL, 0), KEYEVENTF_KEYUP, 0);
+			}
+			result->Success();
 		}
 		else {
 			result->NotImplemented();
