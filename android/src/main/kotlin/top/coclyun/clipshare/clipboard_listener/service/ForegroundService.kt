@@ -26,6 +26,7 @@ import rikka.shizuku.Shizuku.OnBinderDeadListener
 import rikka.shizuku.Shizuku.OnBinderReceivedListener
 import top.coclyun.clipshare.clipboard_listener.ClipboardListener
 import top.coclyun.clipshare.clipboard_listener.ClipboardListenerPlugin
+import top.coclyun.clipshare.clipboard_listener.EnvironmentType
 import top.coclyun.clipshare.clipboard_listener.ILogCallback
 import top.coclyun.clipshare.clipboard_listener.ILogService
 import top.coclyun.clipshare.clipboard_listener.R
@@ -53,6 +54,7 @@ class ForegroundService : Service() {
     private lateinit var mainParams: LayoutParams
     private var view: ViewGroup? = null
     private var useRoot: Boolean = false
+    private var readLogThread:Thread?=null
 
     //region read logs
     private val readLogCallback = object : ILogCallback.Stub() {
@@ -159,7 +161,14 @@ class ForegroundService : Service() {
                             plugin!!.config.notifyContentTextByShizuku
                         )
                         logService = ILogService.Stub.asInterface(binder)
-                        startReadLogs()
+                        try {
+                            startReadLogs()
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                            plugin!!.listening = false
+                            logService = null
+                            Log.w(TAG, "onServiceConnected ${e.message}")
+                        }
                     }
 
                     override fun onServiceDisconnected(componentName: ComponentName) {
@@ -193,30 +202,36 @@ class ForegroundService : Service() {
             return
         }
         Log.d(TAG, "ready to read logs: start")
-        val t = Thread {
+        readLogThread?.interrupt()
+        readLogThread = Thread {
             try {
                 Log.d(TAG, "startReadLogs, useRoot $useRoot")
                 logService!!.startReadLogs(readLogCallback, useRoot)
             } catch (e: Exception) {
                 e.printStackTrace()
-                Log.d(TAG, "startReadLogs: error ${e.message}")
+                Log.i(TAG, "startReadLogs: error ${e.message} listening ${!plugin!!.listening}")
                 notifyForeground("Error", "Clipboard listening stopped abnormally: ${e.message}")
             }
             plugin?.listening = false
-            Log.d(TAG, "startReadLogs: end")
+            Log.i(TAG, "startReadLogs: end")
             notifyForeground("Warning", "Clipboard listening end")
         }
-        t.isDaemon = true
-        t.start()
+        readLogThread?.isDaemon = true
+        readLogThread?.start()
     }
 
     override fun onDestroy() {
-//        super.onDestroy()
-        Log.d(TAG, "ForegroundService onDestroy $logService")
-        logService?.stopReadLogs()
-        logService = null
+        Log.i(TAG, "ForegroundService onDestroy $logService")
         plugin!!.listening = false
-        Shizuku.unbindUserService(plugin!!.userServiceArgs!!, plugin!!.serviceConnection, true)
+        val t = readLogThread
+        readLogThread=null
+        t?.interrupt()
+//        logService?.stopReadLogs()
+        logService = null
+        if (plugin!!.currentEnv == EnvironmentType.shizuku) {
+            Shizuku.unbindUserService(plugin!!.userServiceArgs!!, plugin!!.serviceConnection, true)
+        }
+        super.onDestroy()
     }
     //region notify
 
@@ -270,6 +285,9 @@ class ForegroundService : Service() {
     }
 
     private fun notifyForeground(title: String, content: String) {
+        if (plugin!!.mainActivity == null) {
+            return;
+        }
         val updatedBuilder: NotificationCompat.Builder =
             NotificationCompat.Builder(this, foregroundServiceNotifyChannelId)
                 .setSmallIcon(getAppIcon(applicationContext))

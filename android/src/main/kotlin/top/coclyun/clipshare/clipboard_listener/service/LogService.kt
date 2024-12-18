@@ -43,9 +43,17 @@ open class LogService : ILogService.Stub() {
         }
         val reader = BufferedReader(InputStreamReader(process!!.inputStream))
         var line: String?
-        while (reader.readLine().also { line = it } != null) {
-            callback.onReadLine(line)
+        try{
+            while (reader.readLine().also { line = it } != null) {
+                callback.onReadLine(line)
+            }
+        }catch (e:Exception){
+            Log.w("LogService","read error in loop: ${e.message}")
+            e.printStackTrace()
+        }finally {
+            reader.close()
         }
+
     }
 
     override fun stopReadLogs() {

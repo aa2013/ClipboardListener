@@ -375,6 +375,7 @@ class ClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
 
     override fun onDetachedFromActivity() {
         mainActivity = null
+        stopListening()
     }
     //endregion
 }
