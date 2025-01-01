@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:clipboard_listener/enums.dart';
+import 'package:clipboard_listener/notification_content_config.dart';
 import 'package:flutter/services.dart';
 
 class SelectedFilesResult {
@@ -73,22 +74,18 @@ class ClipboardManager {
   ///[desc] notification description text
   ///[startEnv] the listening mode you want to enable.The options are either a or b. If null, it will automatically select based on the current environment.
   Future<bool> startListening({
-    String? title,
-    String? desc,
+    NotificationContentConfig? notificationContentConfig,
     EnvironmentType? startEnv,
   }) {
     var args = <String, dynamic>{};
-    if (title != null) {
-      args["title"] = title;
-    }
-    if (desc != null) {
-      args["desc"] = desc;
-    }
     if (startEnv != null) {
       args["env"] = startEnv.name;
       if (startEnv == EnvironmentType.none) {
         return Future(() => false);
       }
+    }
+    if (notificationContentConfig != null) {
+      args.addAll(notificationContentConfig.toJson());
     }
     return _channel
         .invokeMethod<bool>(kStartListening, args.isEmpty ? null : args)

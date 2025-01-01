@@ -47,7 +47,7 @@ class ClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
     private lateinit var context: Context
     private val requestShizukuCode = 5001
     var currentEnv: EnvironmentType? = null
-    val config: Config = Config()
+    var config: Config = Config()
     var mainActivity: Activity? = null
     var listening: Boolean = false
     var userServiceArgs: UserServiceArgs? = null
@@ -89,8 +89,6 @@ class ClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
     override fun onMethodCall(call: MethodCall, result: Result) {
         when (call.method) {
             START_LISTENING -> {
-                val title = call.argument<String>("title")
-                val desc = call.argument<String>("desc")
                 val envStr = call.argument<String>("env")
                 var env: EnvironmentType? = null
                 if (envStr != null) {
@@ -104,7 +102,20 @@ class ClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
 
                     }
                 }
-                result.success(startListeningClipboard(title, desc, env))
+                //region 通知参数赋值
+                config = Config().apply {
+                    applicationId = config.applicationId
+                    ignoreNextCopy = config.ignoreNextCopy
+                }
+                val cfgClz = config::class.java
+                for (field in cfgClz.declaredFields) {
+                    field.isAccessible = true
+                    val value = call.argument<String>(field.name)
+                    value?.let { field.set(config, value) }
+                }
+                //endregion
+
+                result.success(startListeningClipboard(env))
             }
 
             STOP_LISTENING -> stopListening()
@@ -136,11 +147,16 @@ class ClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
                 val env = EnvironmentType.valueOf(envName!!)
                 when (env) {
                     EnvironmentType.shizuku -> {
-                        Shizuku.requestPermission(requestShizukuCode)
+                        try {
+                            Shizuku.requestPermission(requestShizukuCode)
+                        } catch (e: Exception) {
+                            onPermissionStatusChanged(EnvironmentType.shizuku, false)
+                        }
                     }
 
                     EnvironmentType.root -> {
-                        checkRootPermission()
+                        val granted = checkRootPermission()
+                        onPermissionStatusChanged(EnvironmentType.root, granted)
                     }
 
                     else -> {}
@@ -208,11 +224,7 @@ class ClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
         )
     }
 
-    private fun startListeningClipboard(
-        title: String? = null,
-        desc: String? = null,
-        env: EnvironmentType? = null
-    ): Boolean {
+    private fun startListeningClipboard(env: EnvironmentType? = null): Boolean {
         if (listening) return false
         if (env == EnvironmentType.root) {
             if (!checkRootPermission()) {
@@ -224,14 +236,10 @@ class ClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
             }
         }
         if (currentEnv == EnvironmentType.androidPre10) return true
-        return startListening(title, desc, env)
+        return startListening(env)
     }
 
-    private fun startListening(
-        title: String? = null,
-        desc: String? = null,
-        env: EnvironmentType?
-    ): Boolean {
+    private fun startListening(env: EnvironmentType?): Boolean {
         try {
             val running = isServiceRunning(
                 context,
@@ -245,12 +253,6 @@ class ClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
             )
             if (running) {
                 context.stopService(serviceIntent)
-            }
-            title?.let {
-                config.notifyContentTitle = it
-            }
-            desc?.let {
-                config.notifyContentTextByShizuku = it
             }
             context.startService(serviceIntent)
             return true

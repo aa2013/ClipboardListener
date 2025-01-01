@@ -54,7 +54,7 @@ class ForegroundService : Service() {
     private lateinit var mainParams: LayoutParams
     private var view: ViewGroup? = null
     private var useRoot: Boolean = false
-    private var readLogThread:Thread?=null
+    private var readLogThread: Thread? = null
 
     //region read logs
     private val readLogCallback = object : ILogCallback.Stub() {
@@ -157,8 +157,8 @@ class ForegroundService : Service() {
                         Log.d(TAG, "onServiceConnected ${componentName.className}")
                         plugin!!.listening = true
                         notifyForeground(
-                            plugin!!.config.notifyContentTitle,
-                            plugin!!.config.notifyContentTextByShizuku
+                            plugin!!.config.serviceRunningTitle,
+                            plugin!!.config.shizukuRunningText
                         )
                         logService = ILogService.Stub.asInterface(binder)
                         try {
@@ -174,7 +174,10 @@ class ForegroundService : Service() {
                     override fun onServiceDisconnected(componentName: ComponentName) {
                         logService?.stopReadLogs()
                         logService = null
-                        notifyForeground("Service disconnected", "LogService disconnected")
+                        notifyForeground(
+                            plugin!!.config.shizukuDisconnectedTitle,
+                            plugin!!.config.shizukuDisconnectedText
+                        )
                     }
                 }
             }
@@ -183,8 +186,8 @@ class ForegroundService : Service() {
         } else {
             logService = LogService()
             notifyForeground(
-                plugin!!.config.notifyContentTitle,
-                plugin!!.config.notifyContentTextByRoot
+                plugin!!.config.serviceRunningTitle,
+                plugin!!.config.rootRunningText
             )
             plugin!!.listening = true
             startReadLogs()
@@ -197,8 +200,13 @@ class ForegroundService : Service() {
     }
 
     private fun startReadLogs() {
+        var errorTextPrefix = plugin!!.config.errorTextPrefix
+        errorTextPrefix = if (errorTextPrefix.isEmpty()) "" else ": "
         if (logService == null) {
-            notifyForeground("Error", "LogService is null")
+            notifyForeground(
+                plugin!!.config.errorTitle,
+                "${errorTextPrefix}LogService is null"
+            )
             return
         }
         Log.d(TAG, "ready to read logs: start")
@@ -210,11 +218,14 @@ class ForegroundService : Service() {
             } catch (e: Exception) {
                 e.printStackTrace()
                 Log.i(TAG, "startReadLogs: error ${e.message} listening ${!plugin!!.listening}")
-                notifyForeground("Error", "Clipboard listening stopped abnormally: ${e.message}")
+                notifyForeground(
+                    plugin!!.config.errorTitle,
+                    "${errorTextPrefix}${e.message}"
+                )
             }
             plugin?.listening = false
-            Log.i(TAG, "startReadLogs: end")
-            notifyForeground("Warning", "Clipboard listening end")
+            Log.i(TAG, "startReadLogs: stopped")
+            notifyForeground(plugin!!.config.stopListeningTitle, plugin!!.config.stopListeningText)
         }
         readLogThread?.isDaemon = true
         readLogThread?.start()
@@ -224,7 +235,7 @@ class ForegroundService : Service() {
         Log.i(TAG, "ForegroundService onDestroy $logService")
         plugin!!.listening = false
         val t = readLogThread
-        readLogThread=null
+        readLogThread = null
         t?.interrupt()
 //        logService?.stopReadLogs()
         logService = null
@@ -274,13 +285,13 @@ class ForegroundService : Service() {
         }
 
         // 设置通知的标题、内容等
-        builder.setContentTitle("Waiting to Running")
+        builder.setContentTitle(plugin!!.config.waitingRunningTitle)
             .setSmallIcon(getAppIcon(applicationContext))
             .setOngoing(true)
             .setSound(null)
             .setContentIntent(createPendingIntent())
 //            .setBadgeIconType(NotificationCompat.BADGE_ICON_NONE)
-            .setContentText("Waiting to Running Service")
+            .setContentText(plugin!!.config.waitingRunningText)
         return builder.build()
     }
 
@@ -291,7 +302,7 @@ class ForegroundService : Service() {
         val updatedBuilder: NotificationCompat.Builder =
             NotificationCompat.Builder(this, foregroundServiceNotifyChannelId)
                 .setSmallIcon(getAppIcon(applicationContext))
-                .setContentTitle(plugin!!.config.notifyContentTitle)
+                .setContentTitle(plugin!!.config.serviceRunningTitle)
                 .setOngoing(true)
                 .setSound(null)
                 .setContentIntent(createPendingIntent())
