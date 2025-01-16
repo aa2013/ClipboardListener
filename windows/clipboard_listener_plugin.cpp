@@ -26,9 +26,9 @@
 #include <vector>
 #include <shlobj.h>
 #include <atlbase.h> // CComPtr
-#pragma warning(disable : 4334)  // ½ûÓÃ¾¯¸æ£º32 Î»ÒÆÎ»µÄ½á¹û±»ÒşÊ½×ª»»Îª 64 Î»(ÊÇ·ñÏ£Íû½øĞĞ 64 Î»ÒÆÎ»?) 
-#pragma warning(disable : 4996)  // ½ûÓÃ·ÏÆú¾¯¸æ
-#pragma warning(disable : 4244)  // ½ûÓÃ¾¯¸æ£º²ÎÊı´Ó UINT ×ªÎª BYTE ¿ÉÄÜ¶ªÊ§Êı¾İ
+#pragma warning(disable : 4334)  // ç¦ç”¨è­¦å‘Šï¼š32 ä½ç§»ä½çš„ç»“æœè¢«éšå¼è½¬æ¢ä¸º 64 ä½(æ˜¯å¦å¸Œæœ›è¿›è¡Œ 64 ä½ç§»ä½?) 
+#pragma warning(disable : 4996)  // ç¦ç”¨åºŸå¼ƒè­¦å‘Š
+#pragma warning(disable : 4244)  // ç¦ç”¨è­¦å‘Šï¼šå‚æ•°ä» UINT è½¬ä¸º BYTE å¯èƒ½ä¸¢å¤±æ•°æ®
 namespace fs = std::filesystem;
 typedef unsigned char uchar;
 void down(BYTE vk)
@@ -44,26 +44,26 @@ void press(BYTE vk)
 	down(vk);
 	up(vk);
 }
-//Ä£ÄâCtrl+V
+//æ¨¡æ‹ŸCtrl+V
 void ctrl_v()
 {
-	down(VK_CONTROL);//°´ÏÂCtrl¼ü
-	press(0x56);//°´ÏÂV¼ü£¬²¢·Å¿ª
-	up(VK_CONTROL);//·Å¿ªV¼ü
+	down(VK_CONTROL);//æŒ‰ä¸‹Ctrlé”®
+	press(0x56);//æŒ‰ä¸‹Vé”®ï¼Œå¹¶æ”¾å¼€
+	up(VK_CONTROL);//æ”¾å¼€Vé”®
 }
 void GetWindowInfo(HWND hwnd) {
-	// »ñÈ¡´°¿Ú±êÌâ
+	// è·å–çª—å£æ ‡é¢˜
 	const int titleLength = 256;
 	wchar_t title[titleLength];
 	GetWindowText(hwnd, title, titleLength);
 
-	// »ñÈ¡´°¿ÚµÄ½ø³Ì ID
+	// è·å–çª—å£çš„è¿›ç¨‹ ID
 	DWORD processId;
 	GetWindowThreadProcessId(hwnd, &processId);
 
-	// ´òÓ¡ĞÅÏ¢
-	std::wcout << L"´°¿Ú±êÌâ: " << title << std::endl;
-	std::wcout << L"½ø³Ì ID: " << processId << std::endl;
+	// æ‰“å°ä¿¡æ¯
+	std::wcout << L"çª—å£æ ‡é¢˜: " << title << std::endl;
+	std::wcout << L"è¿›ç¨‹ ID: " << processId << std::endl;
 }
 namespace clipboard_listener {
 
@@ -123,7 +123,7 @@ namespace clipboard_listener {
 		else if (0 == method_name.compare(std::string(ClipboardListenerPlugin::kGetSelectedFiles))) {
 			std::string fileList;
 			bool succeed = GetSelectedFiles(fileList);
-			// ¹¹½¨Òª´«µİµÄ²ÎÊı
+			// æ„å»ºè¦ä¼ é€’çš„å‚æ•°
 			flutter::EncodableMap map;
 			map[flutter::EncodableValue("list")] = flutter::EncodableValue(fileList);
 			map[flutter::EncodableValue("succeed")] = flutter::EncodableValue(succeed);
@@ -144,7 +144,7 @@ namespace clipboard_listener {
 				auto* arguments = std::get_if<flutter::EncodableMap>(method_call.arguments());
 				auto keyDelayMs= arguments->at(flutter::EncodableValue("keyDelayMs")).LongValue();
 				SetForegroundWindow(this->previousWindowHwnd); 
-				// °´ÏÂ×éºÏ¼ü
+				// æŒ‰ä¸‹ç»„åˆé”®
 				keybd_event(VK_CONTROL, MapVirtualKey(VK_CONTROL, 0), 0, 0);
 				Sleep(keyDelayMs);
 				::SendMessage(this->previousWindowHwnd, WM_KEYDOWN, 0x56, 0);
@@ -164,7 +164,7 @@ namespace clipboard_listener {
 			return;
 		}
 		std::thread([&]() {
-			// ´´½¨Òş²Ø´°¿Ú²¢Æô¶¯ÏûÏ¢Ñ­»·
+			// åˆ›å»ºéšè—çª—å£å¹¶å¯åŠ¨æ¶ˆæ¯å¾ªç¯
 			HINSTANCE hInstance = GetModuleHandle(nullptr);
 			auto window = new ListeningHiddenWindow(hInstance, [&]() {
 				this->OnClipboardChanged();
@@ -181,7 +181,7 @@ namespace clipboard_listener {
 			return;
 		}
 		std::string type;
-		// ´¦Àí¼ôÌù°å±ä»¯µÄ´úÂë¿ÉÒÔ·ÅÔÚÕâÀï
+		// å¤„ç†å‰ªè´´æ¿å˜åŒ–çš„ä»£ç å¯ä»¥æ”¾åœ¨è¿™é‡Œ
 		std::wstring* text = GetClipboardDataCustom(type);
 		if (text == nullptr)return;
 		SendClipboardData(type, *text);
@@ -190,19 +190,19 @@ namespace clipboard_listener {
 
 	std::string ClipboardListenerPlugin::GetCurrentTimeWithMilliseconds()
 	{
-		// »ñÈ¡µ±Ç°Ê±¼äµã
+		// è·å–å½“å‰æ—¶é—´ç‚¹
 		auto now = std::chrono::system_clock::now();
 
-		// ½«Ê±¼äµã×ª»»Îª time_t ÀàĞÍ
+		// å°†æ—¶é—´ç‚¹è½¬æ¢ä¸º time_t ç±»å‹
 		std::time_t time = std::chrono::system_clock::to_time_t(now);
 
-		// »ñÈ¡Ê±¼ä½á¹¹Ìå
+		// è·å–æ—¶é—´ç»“æ„ä½“
 		std::tm tm_time = *std::localtime(&time);
 
-		// »ñÈ¡ºÁÃëÊı
+		// è·å–æ¯«ç§’æ•°
 		auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) % 1000;
 
-		// ¸ñÊ½»¯Ê±¼ä×Ö·û´®
+		// æ ¼å¼åŒ–æ—¶é—´å­—ç¬¦ä¸²
 		std::ostringstream oss;
 		oss << std::put_time(&tm_time, "%Y-%m-%d %H:%M:%S") << '.' << std::setw(3) << std::setfill('0') << milliseconds.
 			count();
@@ -250,24 +250,24 @@ namespace clipboard_listener {
 
 	void ClipboardListenerPlugin::SendClipboardData(std::string& type, std::wstring& content)
 	{
-		// ¶¨ÒåÒ»¸ö locale£¬ÓÃÓÚ×Ö·û¼¯×ª»»
+		// å®šä¹‰ä¸€ä¸ª localeï¼Œç”¨äºå­—ç¬¦é›†è½¬æ¢
 		std::locale loc("en_US.UTF-8");
 
-		// ´´½¨Ò»¸ö codecvt ¶ÔÏó
+		// åˆ›å»ºä¸€ä¸ª codecvt å¯¹è±¡
 		std::wstring_convert<std::codecvt_utf8<wchar_t>> converter;
 
-		// ½«¿í×Ö·û×Ö·û´®×ª»»ÎªÕ­×Ö·û×Ö·û´®
+		// å°†å®½å­—ç¬¦å­—ç¬¦ä¸²è½¬æ¢ä¸ºçª„å­—ç¬¦å­—ç¬¦ä¸²
 		std::string str = converter.to_bytes(content);
-		// ¹¹½¨Òª´«µİµÄ²ÎÊı
+		// æ„å»ºè¦ä¼ é€’çš„å‚æ•°
 		flutter::EncodableMap args = flutter::EncodableMap();
 		args[flutter::EncodableValue("content")] = flutter::EncodableValue(str.c_str());
 		args[flutter::EncodableValue("type")] = flutter::EncodableValue(type.c_str());
 		auto method = std::string(ClipboardListenerPlugin::kOnClipboardChanged);
-		// µ÷ÓÃFlutter·½·¨
+		// è°ƒç”¨Flutteræ–¹æ³•
 		channel_->InvokeMethod(method, std::make_unique<flutter::EncodableValue>(args));
 	}
 
-	//¸´ÖÆÍ¼Æ¬µ½¼ôÌù°å
+	//å¤åˆ¶å›¾ç‰‡åˆ°å‰ªè´´æ¿
 	bool ClipboardListenerPlugin::BitmapToClipboard(HBITMAP hBM, HWND hWnd)
 	{
 		if (!::OpenClipboard(hWnd))
@@ -348,7 +348,7 @@ namespace clipboard_listener {
 
 	bool ClipboardListenerPlugin::CopyData(std::string type, std::string content, int retry)
 	{
-		// ³¢ÊÔ´ò¿ª¼ôÌù°å
+		// å°è¯•æ‰“å¼€å‰ªè´´æ¿
 		bool isOpen = OpenClipboard(nullptr);
 		if (!isOpen)
 		{
@@ -360,14 +360,14 @@ namespace clipboard_listener {
 			return CopyData(type, content, retry + 1);
 		}
 
-		// Çå¿Õ¼ôÌù°åÄÚÈİ
+		// æ¸…ç©ºå‰ªè´´æ¿å†…å®¹
 		EmptyClipboard();
 		std::wstring data = Utf16FromUtf8(content).c_str();
 		HGLOBAL hClipboardData = nullptr;
-		//ÎÄ±¾ÀàĞÍ
+		//æ–‡æœ¬ç±»å‹
 		if (type == "text")
 		{
-			// ·ÖÅäÈ«¾ÖÄÚ´æ£¬ÓÃÓÚ´æ·ÅÎÄ±¾
+			// åˆ†é…å…¨å±€å†…å­˜ï¼Œç”¨äºå­˜æ”¾æ–‡æœ¬
 			hClipboardData = GlobalAlloc(GMEM_MOVEABLE, (wcslen(data.c_str()) + 1) * sizeof(wchar_t));
 			if (!hClipboardData)
 			{
@@ -375,7 +375,7 @@ namespace clipboard_listener {
 				std::cerr << "Failed to allocate memory for clipboard!" << std::endl;
 				return false;
 			}
-			// ½«ÎÄ±¾¸´ÖÆµ½È«¾ÖÄÚ´æÖĞ
+			// å°†æ–‡æœ¬å¤åˆ¶åˆ°å…¨å±€å†…å­˜ä¸­
 			auto const pchData = static_cast<wchar_t*>(GlobalLock(hClipboardData));
 			if (!pchData)
 			{
@@ -386,7 +386,7 @@ namespace clipboard_listener {
 			wcscpy_s(pchData, wcslen(data.c_str()) + 1, data.c_str());
 			GlobalUnlock(hClipboardData);
 
-			// ½«È«¾ÖÄÚ´æ·ÅÈë¼ôÌù°å
+			// å°†å…¨å±€å†…å­˜æ”¾å…¥å‰ªè´´æ¿
 			SetClipboardData(CF_UNICODETEXT, hClipboardData);
 		}
 		if (type == "image")
@@ -403,11 +403,11 @@ namespace clipboard_listener {
 			BitmapToClipboard(hBitmap, nullptr);
 			DeleteObject(hBitmap);
 		}
-		// ¹Ø±Õ¼ôÌù°å
+		// å…³é—­å‰ªè´´æ¿
 		CloseClipboard();
 		if (hClipboardData)
 		{
-			//ÊÍ·ÅGlobalAlloc·ÖÅäµÄÄÚ´æ
+			//é‡Šæ”¾GlobalAllocåˆ†é…çš„å†…å­˜
 			GlobalFree(hClipboardData);
 		}
 		return true;
@@ -415,7 +415,7 @@ namespace clipboard_listener {
 
 	std::wstring* ClipboardListenerPlugin::GetClipboardText()
 	{
-		// ³¢ÊÔ»ñÈ¡¼ôÌù°åÖĞµÄÊı¾İ
+		// å°è¯•è·å–å‰ªè´´æ¿ä¸­çš„æ•°æ®
 		const HANDLE hData = GetClipboardData(CF_UNICODETEXT);
 		if (hData == nullptr)
 		{
@@ -423,7 +423,7 @@ namespace clipboard_listener {
 			return nullptr;
 		}
 
-		// Ëø¶¨ÄÚ´æ²¢»ñÈ¡Êı¾İ
+		// é”å®šå†…å­˜å¹¶è·å–æ•°æ®
 		const wchar_t* pszText = static_cast<wchar_t*>(GlobalLock(hData));
 		if (pszText == nullptr)
 		{
@@ -431,16 +431,16 @@ namespace clipboard_listener {
 			return nullptr;
 		}
 
-		// ÊÍ·ÅÄÚ´æºÍ¹Ø±Õ¼ôÌù°å
+		// é‡Šæ”¾å†…å­˜å’Œå…³é—­å‰ªè´´æ¿
 		GlobalUnlock(hData);
-		// ¸´ÖÆÊı¾İµ½×Ö·û´®
+		// å¤åˆ¶æ•°æ®åˆ°å­—ç¬¦ä¸²
 		return new std::wstring(pszText);
 	}
 
 	bool ClipboardListenerPlugin::DIBToPNG(const HBITMAP hbtmip, const std::wstring* outputPath)
 	{
 		CImage image;
-		// ´Ó HBITMAP ´´½¨Í¼Ïñ
+		// ä» HBITMAP åˆ›å»ºå›¾åƒ
 		image.Attach(hbtmip);
 		auto path = outputPath->c_str();
 		std::string folderPath = fs::path(path).parent_path().string();
@@ -448,7 +448,7 @@ namespace clipboard_listener {
 		{
 			fs::create_directories(folderPath);
 		}
-		// ±£´æÎª PNG ¸ñÊ½
+		// ä¿å­˜ä¸º PNG æ ¼å¼
 		if (image.Save(path, Gdiplus::ImageFormatPNG) != S_OK)
 		{
 			return false;
@@ -470,7 +470,7 @@ namespace clipboard_listener {
 
 	std::wstring* ClipboardListenerPlugin::GetClipboardImg()
 	{
-		// ³¢ÊÔ»ñÈ¡¼ôÌù°åÖĞµÄÊı¾İ
+		// å°è¯•è·å–å‰ªè´´æ¿ä¸­çš„æ•°æ®
 		const HANDLE hData = GetClipboardData(CF_DIB);
 		if (hData == nullptr)
 		{
@@ -478,35 +478,35 @@ namespace clipboard_listener {
 			return nullptr;
 		}
 
-		// Ëø¶¨ÄÚ´æ²¢»ñÈ¡Êı¾İ
+		// é”å®šå†…å­˜å¹¶è·å–æ•°æ®
 		void* pData = GlobalLock(hData);
 		if (pData == nullptr)
 		{
 			CloseClipboard();
 			return nullptr;
 		}
-		// ½« CF_DIB Êı¾İ×ª»»Îª HBITMAP
+		// å°† CF_DIB æ•°æ®è½¬æ¢ä¸º HBITMAP
 		const HDC hdc = GetDC(nullptr);
 		const auto info = static_cast<BITMAPINFO*>(pData);
 		const auto header = static_cast<const BITMAPINFOHEADER*>(pData);
-		//´´½¨Î»Í¼£¬Î»Í¼Êı¾İ´Ó header + 1 ¿ªÊ¼
+		//åˆ›å»ºä½å›¾ï¼Œä½å›¾æ•°æ®ä» header + 1 å¼€å§‹
 		const HBITMAP hBitmap = CreateDIBitmap(hdc, header, CBM_INIT, header + 1, info, DIB_RGB_COLORS);
 		if (hBitmap == nullptr)
 			return nullptr;
 		auto currentTime = GetCurrentTimeWithMilliseconds();
-		// Ê¹ÓÃÕıÔò±í´ïÊ½Ìæ»»ËùÓĞÃ°ºÅºÍ¿Õ¸ñ
+		// ä½¿ç”¨æ­£åˆ™è¡¨è¾¾å¼æ›¿æ¢æ‰€æœ‰å†’å·å’Œç©ºæ ¼
 		std::regex reg("[:.]");
 		currentTime = std::regex_replace(currentTime, reg, "-");
 		reg = std::regex(" +");
 		currentTime = std::regex_replace(currentTime, reg, "_");
 		auto timeStr = std::wstring(currentTime.begin(), currentTime.end());
 		auto execDir = GetExecutableDir();
-		// Æ´½ÓÍ¼Æ¬ÁÙÊ±´æ´¢Â·¾¶
+		// æ‹¼æ¥å›¾ç‰‡ä¸´æ—¶å­˜å‚¨è·¯å¾„
 		const auto path = new std::wstring(execDir + L"tmp/" + timeStr + L".png");
-		//Î»Í¼×ªPNG´æ´¢
+		//ä½å›¾è½¬PNGå­˜å‚¨
 		auto res = DIBToPNG(hBitmap, path);
 		ReleaseDC(nullptr, hdc);
-		//»ñÈ¡´æ´¢µÄ¾ø¶ÔÂ·¾¶
+		//è·å–å­˜å‚¨çš„ç»å¯¹è·¯å¾„
 		auto absolutePath = fs::absolute(path->c_str()).string();
 		return res ? new std::wstring(absolutePath.begin(), absolutePath.end()) : nullptr;
 	}
@@ -514,7 +514,7 @@ namespace clipboard_listener {
 	std::wstring* ClipboardListenerPlugin::GetClipboardDataCustom(std::string& type, int retry)
 	{
 		std::wstring* data = nullptr;
-		// ³¢ÊÔ´ò¿ª¼ôÌù°å
+		// å°è¯•æ‰“å¼€å‰ªè´´æ¿
 		bool isOpen = OpenClipboard(nullptr);
 		if (!isOpen)
 		{
@@ -524,7 +524,7 @@ namespace clipboard_listener {
 			return GetClipboardDataCustom(type, retry + 1);
 		}
 
-		// ³¢ÊÔ»ñÈ¡¼ôÌù°åÖĞµÄÊı¾İ£¬´æÔÚÎÄ±¾ÔòÖ±½Ó·µ»Ø
+		// å°è¯•è·å–å‰ªè´´æ¿ä¸­çš„æ•°æ®ï¼Œå­˜åœ¨æ–‡æœ¬åˆ™ç›´æ¥è¿”å›
 		if (IsClipboardFormatAvailable(CF_UNICODETEXT))
 		{
 			data = GetClipboardText();
@@ -571,7 +571,7 @@ namespace clipboard_listener {
 
 			CComPtr<IDispatch> dispatch;
 			shellWindows->Item(index, &dispatch);
-			//²Î¿¼£ºhttps://cloud.tencent.com/developer/ask/sof/114218481
+			//å‚è€ƒï¼šhttps://cloud.tencent.com/developer/ask/sof/114218481
 			CComPtr<IServiceProvider> sp;
 			hr = dispatch->QueryInterface(IID_IServiceProvider, (void**)&sp);
 			if (!SUCCEEDED(hr))
@@ -582,7 +582,7 @@ namespace clipboard_listener {
 			if (!SUCCEEDED(hr))
 				return false;
 
-			//webBrowserÓÃÓÚ»ñÈ¡shellwindowµÄhwnd
+			//webBrowserç”¨äºè·å–shellwindowçš„hwnd
 			CComPtr<IWebBrowserApp> webBrowser;
 			hr = dispatch->QueryInterface(IID_IWebBrowserApp, (void**)&webBrowser);
 			if (!SUCCEEDED(hr))
@@ -591,7 +591,7 @@ namespace clipboard_listener {
 			HWND hwnd;
 			hr = webBrowser->get_HWND((SHANDLE_PTR*)&hwnd);
 			if (!SUCCEEDED(hr) || foregroundWindow != hwnd) {
-				//²»ÔÚÇ°Ì¨£¬Ìø¹ı
+				//ä¸åœ¨å‰å°ï¼Œè·³è¿‡
 				continue;
 			}
 
@@ -636,10 +636,10 @@ namespace clipboard_listener {
 		std::vector<std::wstring> paths;
 		HWND foregroundHwnd = GetForegroundWindow();
 		bool isdeskTop = false;
-		// »ñÈ¡Ç°Ì¨´°¿ÚµÄÀàÃû
+		// è·å–å‰å°çª—å£çš„ç±»å
 		wchar_t className[256];
 		GetClassNameW(foregroundHwnd, className, sizeof(className) / sizeof(className[0]));
-		// ÅĞ¶Ï´°¿ÚÀàÃûÊÇ·ñÎª×ÀÃæ´°¿ÚµÄÀàÃû
+		// åˆ¤æ–­çª—å£ç±»åæ˜¯å¦ä¸ºæ¡Œé¢çª—å£çš„ç±»å
 		if (wcscmp(className, L"Progman") == 0 || wcscmp(className, L"WorkerW") == 0) {
 			isdeskTop = true;
 		}

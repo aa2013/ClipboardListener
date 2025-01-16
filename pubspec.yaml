@@ -43,6 +43,8 @@ flutter:
         pluginClass: ClipboardListenerPlugin
       windows:
         pluginClass: ClipboardListenerPluginCApi
+      linux:
+        pluginClass: ClipboardListenerPlugin
 
   # To add assets to your plugin package, add an assets section, like this:
   # assets:
