@@ -226,7 +226,7 @@ static FlMethodResponse *copyData(ClipboardListenerPlugin *self, const gchar *ty
 {
   bool success = false;
   GtkClipboard *clipboard = gtk_clipboard_get(GDK_SELECTION_CLIPBOARD);
-  // self->ignoreNextCopy = true;
+  self->ignoreNextCopy = true;
   if (strcmp(type, "text") == 0)
   {
     // 将文本设置到剪贴板
