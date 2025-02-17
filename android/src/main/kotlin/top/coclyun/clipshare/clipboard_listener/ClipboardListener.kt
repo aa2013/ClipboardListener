@@ -71,10 +71,11 @@ open class ClipboardListener(
                 (if (item.text == null) item.coerceToText(context) else item.text).toString()
             Log.d(TAG, "label:$label, uri:${item.uri}, content: $content")
             if (item.uri != null) {
-                val uriStr = item.uri.toString()
-                if (label.contains("image") || uriStr.startsWith(mediaImagesUri)) {
+                val contentResolver = context.contentResolver
+                val mimeType = contentResolver.getType(item.uri);
+                Log.d(TAG, "mimeType:$mimeType")
+                if (mimeType != null && mimeType.startsWith("image")) {
                     type = ClipboardContentType.Image;
-                    val contentResolver = context.contentResolver
                     val currentTimeMillis = System.currentTimeMillis()
                     val dateFormat = SimpleDateFormat("yyyy-MM-dd_HH-mm-ss-S", Locale.CHINA)
                     val fileName = dateFormat.format(Date(currentTimeMillis))
