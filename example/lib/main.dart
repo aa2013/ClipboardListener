@@ -11,7 +11,6 @@ import 'package:permission_handler/permission_handler.dart';
 
 void main(List<String> args) {
   var isMultiWindow = args.firstOrNull == 'multi_window';
-  print(isMultiWindow);
   if (isMultiWindow) {
     runApp(MultiWindow());
   } else {
@@ -36,10 +35,8 @@ class _MyAppState extends State<MyApp> with ClipboardListener {
   void initState() {
     super.initState();
     clipboardManager.addListener(this);
-    if (Platform.isWindows) {
-      initHotKey();
-      initMultiWindowEvent();
-    }
+    initHotKey();
+    initMultiWindowEvent();
     if (Platform.isAndroid) {
       Permission.systemAlertWindow.request();
       clipboardManager.getCurrentEnvironment().then((env) {
@@ -184,6 +181,49 @@ class _MyAppState extends State<MyApp> with ClipboardListener {
                 ),
               ),
               //endregion
+              //region Linux
+              Visibility(
+                visible: Platform.isLinux,
+                child: Column(
+                  children: [
+                    GestureDetector(
+                      onTap: () {
+                        clipboardManager.startListening().then((res) {
+                          if (res) {
+                            showSnackBarSuc(
+                              context,
+                              "Listening started successfully",
+                            );
+                          } else {
+                            showSnackBarErr(
+                              context,
+                              "Listening failed to start",
+                            );
+                          }
+                        });
+                      },
+                      child: const Chip(label: Text("Start listening")),
+                    ),
+                    GestureDetector(
+                      onTap: () {
+                        clipboardManager.stopListening().then((res) {
+                          showSnackBarSuc(
+                            context,
+                            "Listening stopped successfully",
+                          );
+                        }).catchError((err) {
+                          showSnackBarErr(
+                            context,
+                            "Listening failed to stop",
+                          );
+                        });
+                      },
+                      child: const Chip(label: Text("Stop listening")),
+                    ),
+                  ],
+                ),
+              ),
+              //endregion
               Text('type: $type\n\ncontent:\n$content\n\n'),
               const SizedBox(
                 height: 10,
@@ -198,7 +238,13 @@ class _MyAppState extends State<MyApp> with ClipboardListener {
                       Random().nextInt(99999).toString());
                 },
                 child: const Chip(label: Text("Copy Random Data")),
-              )
+              ),
+              GestureDetector(
+                onTap: () {
+                  clipboardManager.copy(ClipboardContentType.image,"/tmp/2025-01-16_22-29-42-6.png");
+                },
+                child: const Chip(label: Text("Copy Test Image(mannal set on code)")),
+              ),
             ],
           );
         }),
@@ -243,14 +289,16 @@ class _MyAppState extends State<MyApp> with ClipboardListener {
   Future<void> initHotKey() async {
     await hotKeyManager.unregisterAll();
     final key = HotKey(
-      key: PhysicalKeyboardKey.keyH,
+      key: PhysicalKeyboardKey.keyG,
       modifiers: [HotKeyModifier.control, HotKeyModifier.alt],
       scope: HotKeyScope.system,
     );
     await hotKeyManager.register(
       key,
       keyDownHandler: (hotKey) async {
-        await clipboardManager.storeCurrentWindowHwnd();
+        if (Platform.isWindows) {
+          await clipboardManager.storeCurrentWindowHwnd();
+        }
         //createWindow里面的参数必须传
         final window = await DesktopMultiWindow.createWindow('{}');
         window
