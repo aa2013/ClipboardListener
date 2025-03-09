@@ -106,6 +106,50 @@ class ClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
                 config = Config().apply {
                     applicationId = config.applicationId
                     ignoreNextCopy = config.ignoreNextCopy
+                    //region 通知参数赋值
+                    call.argument<String>("errorTitle")?.let {
+                        errorTitle = it
+                    }
+                    call.argument<String>("errorTextPrefix")?.let {
+                        errorTextPrefix = it
+                    }
+
+                    call.argument<String>("stopListeningTitle")?.let {
+                        stopListeningTitle = it
+                    }
+
+                    call.argument<String>("stopListeningText")?.let {
+                        stopListeningText = it
+                    }
+
+                    call.argument<String>("serviceRunningTitle")?.let {
+                        serviceRunningTitle = it
+                    }
+
+                    call.argument<String>("shizukuRunningText")?.let {
+                        shizukuRunningText = it
+                    }
+
+                    call.argument<String>("rootRunningText")?.let {
+                        rootRunningText = it
+                    }
+
+                    call.argument<String>("shizukuDisconnectedTitle")?.let {
+                        shizukuDisconnectedTitle = it
+                    }
+
+                    call.argument<String>("shizukuDisconnectedText")?.let {
+                        shizukuDisconnectedText = it
+                    }
+
+                    call.argument<String>("waitingRunningTitle")?.let {
+                        waitingRunningTitle = it
+                    }
+
+                    call.argument<String>("waitingRunningText")?.let {
+                        waitingRunningText = it
+                    }
+                    //endregion
                 }
                 val cfgClz = config::class.java
                 for (field in cfgClz.declaredFields) {
