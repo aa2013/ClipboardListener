@@ -6,6 +6,10 @@ enum class EnvironmentType {
     androidPre10
 }
 
+enum class EventEnum {
+    onChanged, comment, fatal, eof
+}
+
 enum class ClipboardContentType {
     Text, Image;
 

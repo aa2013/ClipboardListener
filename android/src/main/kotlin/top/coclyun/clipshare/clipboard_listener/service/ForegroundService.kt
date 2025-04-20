@@ -27,9 +27,12 @@ import rikka.shizuku.Shizuku.OnBinderReceivedListener
 import top.coclyun.clipshare.clipboard_listener.ClipboardListener
 import top.coclyun.clipshare.clipboard_listener.ClipboardListenerPlugin
 import top.coclyun.clipshare.clipboard_listener.EnvironmentType
-import top.coclyun.clipshare.clipboard_listener.ILogCallback
-import top.coclyun.clipshare.clipboard_listener.ILogService
+import top.coclyun.clipshare.clipboard_listener.IClipboardListenerService
+import top.coclyun.clipshare.clipboard_listener.IOnClipboardChanged
 import top.coclyun.clipshare.clipboard_listener.R
+import top.coclyun.clipshare.clipboard_listener.copyAssetToExternalPrivateDir
+import top.coclyun.clipshare.clipboard_listener.isFileExistsInPrivateDir
+import java.io.File
 import java.lang.ref.WeakReference
 
 
@@ -42,10 +45,11 @@ class ForegroundService : Service() {
         val foregroundServiceNotifyChannelId = "ForegroundService"
 
         @JvmStatic
-        private var logService: ILogService? = null
+        private var listenerService: IClipboardListenerService? = null
     }
 
     private val TAG = "ForegroundService"
+    private val listenerZipFileName = "listener.zip"
 
     //mHandler用于弱引用和主线程更新UI，避免内存泄漏。
     private var mHandler = MyHandler(this)
@@ -56,18 +60,19 @@ class ForegroundService : Service() {
     private var useRoot: Boolean = false
     private var readLogThread: Thread? = null
 
-    //region read logs
-    private val readLogCallback = object : ILogCallback.Stub() {
-        override fun onReadLine(line: String?) {
-            if (line!!.contains(plugin!!.config.applicationId)) {
-                Log.d(TAG, "onReadLine: $line")
-                if (plugin!!.config.ignoreNextCopy) {
-                    plugin!!.config.ignoreNextCopy = false
-                } else {
-                    mHandler.sendMessage(Message())
-                }
+    //region Clipboard Listener
+    private val clipboardListenerCallback = object : IOnClipboardChanged.Stub() {
+        override fun onChanged(logLine: String?) {
+            if(logLine != null && !logLine.contains(plugin!!.config.applicationId)){
+                return
+            }
+            if (plugin!!.config.ignoreNextCopy) {
+                plugin!!.config.ignoreNextCopy = false
+            } else {
+                mHandler.sendMessage(Message())
             }
         }
+
     }
 
     class MyHandler(foregroundService: ForegroundService) : Handler() {
@@ -76,7 +81,7 @@ class ForegroundService : Service() {
 
         override fun handleMessage(msg: Message) {
             mOuter.get().let {
-                Log.d("read_logs", it.toString())
+                Log.d("listener onChanged", it.toString())
                 it?.showFloatFocusView()
             }
         }
@@ -135,13 +140,22 @@ class ForegroundService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d(TAG, "onStartCommand")
-        logService?.stopReadLogs()
-        logService = null
+        listenerService?.stopListening()
+        listenerService = null
         useRoot = intent?.getBooleanExtra("useRoot", false) ?: false
         plugin = ClipboardListenerPlugin.instance
         Shizuku.addBinderReceivedListenerSticky(onBinderReceivedListener)
         Shizuku.addBinderDeadListener(onBinderDeadListener)
         createNotify()
+        if (!copyAssetToExternalPrivateDir(
+                applicationContext,
+                listenerZipFileName,
+                listenerZipFileName
+            )
+        ) {
+            notifyForeground("Error", "Can not copy listener file")
+            throw RuntimeException("Can not copy listener file")
+        }
         if (plugin == null) throw Exception("plugin instance is not init")
         if (!useRoot) {
             if (plugin!!.serviceConnection != null) {
@@ -160,20 +174,20 @@ class ForegroundService : Service() {
                             plugin!!.config.serviceRunningTitle,
                             plugin!!.config.shizukuRunningText
                         )
-                        logService = ILogService.Stub.asInterface(binder)
+                        listenerService = IClipboardListenerService.Stub.asInterface(binder)
                         try {
-                            startReadLogs()
+                            startListening()
                         } catch (e: Exception) {
                             e.printStackTrace()
                             plugin!!.listening = false
-                            logService = null
+                            listenerService = null
                             Log.w(TAG, "onServiceConnected ${e.message}")
                         }
                     }
 
                     override fun onServiceDisconnected(componentName: ComponentName) {
-                        logService?.stopReadLogs()
-                        logService = null
+                        listenerService?.stopListening()
+                        listenerService = null
                         notifyForeground(
                             plugin!!.config.shizukuDisconnectedTitle,
                             plugin!!.config.shizukuDisconnectedText
@@ -184,13 +198,13 @@ class ForegroundService : Service() {
 
             Shizuku.bindUserService(plugin!!.userServiceArgs!!, plugin!!.serviceConnection!!)
         } else {
-            logService = LogService()
+            listenerService = ClipboardListenerService()
             notifyForeground(
                 plugin!!.config.serviceRunningTitle,
                 plugin!!.config.rootRunningText
             )
             plugin!!.listening = true
-            startReadLogs()
+            startListening()
         }
         return START_NOT_STICKY
     }
@@ -199,32 +213,33 @@ class ForegroundService : Service() {
         return null;
     }
 
-    private fun startReadLogs() {
+    private fun startListening() {
         var errorTextPrefix = plugin!!.config.errorTextPrefix
         errorTextPrefix = if (errorTextPrefix.isEmpty()) "" else ": "
-        if (logService == null) {
+        if (listenerService == null) {
             notifyForeground(
                 plugin!!.config.errorTitle,
-                "${errorTextPrefix}LogService is null"
+                "${errorTextPrefix}ListenerService is null"
             )
             return
         }
-        Log.d(TAG, "ready to read logs: start")
+        Log.d(TAG, "listening start")
         readLogThread?.interrupt()
         readLogThread = Thread {
             try {
-                Log.d(TAG, "startReadLogs, useRoot $useRoot")
-                logService!!.startReadLogs(readLogCallback, useRoot)
+                Log.d(TAG, "listening, useRoot $useRoot")
+                val path = File(applicationContext.getExternalFilesDir(null), listenerZipFileName).path
+                listenerService!!.startListening(clipboardListenerCallback, useRoot, path)
             } catch (e: Exception) {
                 e.printStackTrace()
-                Log.i(TAG, "startReadLogs: error ${e.message} listening ${!plugin!!.listening}")
+                Log.i(TAG, "startListening: error ${e.message} listening ${!plugin!!.listening}")
                 notifyForeground(
                     plugin!!.config.errorTitle,
                     "${errorTextPrefix}${e.message}"
                 )
             }
             plugin?.listening = false
-            Log.i(TAG, "startReadLogs: stopped")
+            Log.i(TAG, "startListening: stopped")
             notifyForeground(plugin!!.config.stopListeningTitle, plugin!!.config.stopListeningText)
         }
         readLogThread?.isDaemon = true
@@ -232,13 +247,13 @@ class ForegroundService : Service() {
     }
 
     override fun onDestroy() {
-        Log.i(TAG, "ForegroundService onDestroy $logService")
+        Log.i(TAG, "ForegroundService onDestroy $listenerService")
         plugin!!.listening = false
         val t = readLogThread
         readLogThread = null
         t?.interrupt()
 //        logService?.stopReadLogs()
-        logService = null
+        listenerService = null
         if (plugin!!.currentEnv == EnvironmentType.shizuku) {
             Shizuku.unbindUserService(plugin!!.userServiceArgs!!, plugin!!.serviceConnection, true)
         }

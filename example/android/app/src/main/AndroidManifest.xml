@@ -1,6 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!--    添加前台服务权限声明-->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!--    悬浮窗权限-->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
@@ -38,6 +39,7 @@
         <!--    声明前台服务-->
         <service
             android:name="top.coclyun.clipshare.clipboard_listener.service.ForegroundService"
+            android:foregroundServiceType="specialUse"
             android:enabled="true"
             android:exported="false" />
         <!--    声明文件处理provider-->

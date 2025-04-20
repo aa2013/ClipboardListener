@@ -1,0 +1,4 @@
+adb shell
+
+export CLASSPATH=/data/local/tmp/listener.zip
+app_process -Djava.class.path=$CLASSPATH /data/local/tmp top.coclyun.clipshare.clipboard_listener.ClipboardListener

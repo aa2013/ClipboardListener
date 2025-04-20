@@ -66,7 +66,7 @@ class ClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
         userServiceArgs = UserServiceArgs(
             android.content.ComponentName(
                 config.applicationId,
-                top.coclyun.clipshare.clipboard_listener.service.LogService::class.java.name
+                top.coclyun.clipshare.clipboard_listener.service.ClipboardListenerService::class.java.name
             )
         ).daemon(false).processNameSuffix("service")
         Log.d(TAG, "applicationId: ${config.applicationId}")

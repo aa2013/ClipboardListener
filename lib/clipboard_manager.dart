@@ -49,6 +49,7 @@ const kStopListening = "stopListening";
 const kGetShizukuversion = "getShizukuVersion";
 const kStoreCurrentWindowHwnd = "storeCurrentWindowHwnd";
 const kPasteToPreviousWindow = "pasteToPreviousWindow";
+const kSetTempFileDir = "setTempFileDir";
 const kCopy = "copy";
 
 class ClipboardManager {
@@ -73,10 +74,7 @@ class ClipboardManager {
   ///[title] notification title text
   ///[desc] notification description text
   ///[startEnv] the listening mode you want to enable.The options are either a or b. If null, it will automatically select based on the current environment.
-  Future<bool> startListening({
-    NotificationContentConfig? notificationContentConfig,
-    EnvironmentType? startEnv,
-  }) {
+  Future<bool> startListening({NotificationContentConfig? notificationContentConfig, EnvironmentType? startEnv}) {
     var args = <String, dynamic>{};
     if (startEnv != null) {
       args["env"] = startEnv.name;
@@ -87,9 +85,7 @@ class ClipboardManager {
     if (notificationContentConfig != null) {
       args.addAll(notificationContentConfig.toJson());
     }
-    return _channel
-        .invokeMethod<bool>(kStartListening, args.isEmpty ? null : args)
-        .then((value) => value ?? false);
+    return _channel.invokeMethod<bool>(kStartListening, args.isEmpty ? null : args).then((value) => value ?? false);
   }
 
   /// stop listening clipboard
@@ -105,18 +101,14 @@ class ClipboardManager {
 
   ///check listener running status
   Future<bool> checkIsRunning() {
-    return _channel
-        .invokeMethod<bool>(kCheckIsRunning)
-        .then((value) => value ?? false);
+    return _channel.invokeMethod<bool>(kCheckIsRunning).then((value) => value ?? false);
   }
 
   ///Check if there is permission (only Android/IOS)
   Future<bool> checkPermission(EnvironmentType env) {
     if (!Platform.isAndroid && !Platform.isIOS) return Future.value(false);
     final args = {"env": env.name};
-    return _channel
-        .invokeMethod<bool>(kCheckPermission, args)
-        .then((value) => value ?? false);
+    return _channel.invokeMethod<bool>(kCheckPermission, args).then((value) => value ?? false);
   }
 
   ///request permission (only Android/IOS)
@@ -135,10 +127,7 @@ class ClipboardManager {
       if (res == null) {
         return SelectedFilesResult.empty();
       }
-      return SelectedFilesResult(
-        res["succeed"] ?? false,
-        (res["list"] as String?)?.split(";") ?? [],
-      );
+      return SelectedFilesResult(res["succeed"] ?? false, (res["list"] as String?)?.split(";") ?? []);
     });
   }
 
@@ -148,9 +137,7 @@ class ClipboardManager {
   ///[content] The content that needs to be copied, if it is an image, is the image path
   Future<bool> copy(ClipboardContentType type, String content) {
     final args = {"type": type.name, "content": content};
-    return _channel
-        .invokeMethod<bool>(kCopy, args)
-        .then((value) => value ?? false);
+    return _channel.invokeMethod<bool>(kCopy, args).then((value) => value ?? false);
   }
 
   ///Save the hwnd of the current window and use it in conjunction with [pasteToPreviousWindow] method
@@ -181,6 +168,11 @@ class ClipboardManager {
       if (hasPermission) return env;
     }
     return EnvironmentType.none;
+  }
+  ///end with '/' or '\'
+  Future<void> setTempFileDir(String dirPath) async {
+    if (!Platform.isWindows) return;
+    _channel.invokeMethod(kSetTempFileDir, {"tempFileDir": dirPath});
   }
 
   Future<void> _methodCallHandler(MethodCall call) async {
