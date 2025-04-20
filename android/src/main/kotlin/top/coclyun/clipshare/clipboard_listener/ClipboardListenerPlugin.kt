@@ -90,7 +90,11 @@ class ClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
         when (call.method) {
             START_LISTENING -> {
                 val envStr = call.argument<String>("env")
+                val wayStr = call.argument<String>("way")
                 var env: EnvironmentType? = null
+                var way: ClipboardListeningWay? = null
+
+                //region 工作环境参数
                 if (envStr != null) {
                     try {
                         env = EnvironmentType.valueOf(envStr)
@@ -102,6 +106,21 @@ class ClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
 
                     }
                 }
+                //endregion
+
+                //region 监听方式参数
+                if (wayStr == null) {
+                    result.success(false)
+                    return
+                }
+                try {
+                    way = ClipboardListeningWay.valueOf(wayStr)
+                } catch (_: Exception) {
+                    result.success(false)
+                    return
+                }
+                //endregion
+
                 //region 通知参数赋值
                 config = Config().apply {
                     applicationId = config.applicationId
@@ -159,10 +178,18 @@ class ClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
                 }
                 //endregion
 
-                result.success(startListeningClipboard(env))
+                result.success(startListeningClipboard(env, way))
             }
 
-            STOP_LISTENING -> stopListening()
+            STOP_LISTENING -> {
+                try {
+                    stopListening()
+                    result.success(true)
+                }catch (e:Exception){
+                    e.printStackTrace()
+                    result.success(false)
+                }
+            }
             GET_SHIZUKUVERSION -> result.success(Shizuku.getVersion())
             CHECK_IS_RUNNING -> {
                 if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
@@ -268,7 +295,10 @@ class ClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
         )
     }
 
-    private fun startListeningClipboard(env: EnvironmentType? = null): Boolean {
+    private fun startListeningClipboard(
+        env: EnvironmentType? = null,
+        way: ClipboardListeningWay
+    ): Boolean {
         if (listening) return false
         if (env == EnvironmentType.root) {
             if (!checkRootPermission()) {
@@ -280,10 +310,10 @@ class ClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
             }
         }
         if (currentEnv == EnvironmentType.androidPre10) return true
-        return startListening(env)
+        return startListening(env, way)
     }
 
-    private fun startListening(env: EnvironmentType?): Boolean {
+    private fun startListening(env: EnvironmentType?, way: ClipboardListeningWay): Boolean {
         try {
             val running = isServiceRunning(
                 context,
@@ -295,6 +325,7 @@ class ClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
                 "useRoot",
                 (env ?: currentEnv) == EnvironmentType.root
             )
+            serviceIntent.putExtra("way", way.name)
             if (running) {
                 context.stopService(serviceIntent)
             }

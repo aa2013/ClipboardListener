@@ -56,6 +56,7 @@ public abstract class OnPrimaryClipChangedListenerAdapter extends IOnPrimaryClip
         var now = LocalDateTime.now();
         var offsetMs = Math.abs(Duration.between(now, lastTime).toMillis());
         if (offsetMs < MIN_INTERVAL_MS) {
+            System.out.println(new Event(EventEnum.comment, "Interval less than " + MIN_INTERVAL_MS + "ms"));
             return;
         }
         lastTime = LocalDateTime.now();

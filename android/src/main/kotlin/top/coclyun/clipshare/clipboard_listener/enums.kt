@@ -24,3 +24,7 @@ enum class ClipboardContentType {
         }
     }
 }
+
+enum class ClipboardListeningWay {
+    logs, hiddenApi;
+}

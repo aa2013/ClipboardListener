@@ -19,10 +19,14 @@ public class ClipboardListener {
             System.out.println(new Event(EventEnum.comment, "systemMain = " + systemMain));
             var method = activityThread.getMethod("getSystemContext");
             Context context = (Context) method.invoke(systemMain);
+            System.out.println(new Event(EventEnum.comment, "getSystemContext = " + context));
             ClipboardManager cm = (ClipboardManager) context.getSystemService(Context.CLIPBOARD_SERVICE);
+            System.out.println(new Event(EventEnum.comment, "ClipboardManager = " + cm));
             Field mServiceField = ClipboardManager.class.getDeclaredField("mService");
+            System.out.println(new Event(EventEnum.comment, "mServiceField = " + mServiceField));
             mServiceField.setAccessible(true);
             var clipboard = (IClipboard) mServiceField.get(cm);
+            System.out.println(new Event(EventEnum.comment, "IClipboard = " + clipboard));
             var adapter = new OnPrimaryClipChangedListenerAdapter(clipboard) {
                 @Override
                 public void onPrimaryClipChanged() {

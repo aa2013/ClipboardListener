@@ -17,6 +17,7 @@ import java.util.Locale
 open class ClipboardListenerService : IClipboardListenerService.Stub() {
     private val TAG = "ClipboardListenerService"
     private var process: Process? = null
+    private var stopped: Boolean = false
     private fun buildCommandsWithSpace(commands: Array<String>): String {
         val res = Array(commands.size) { "" }
         for (i in commands.indices) {
@@ -29,10 +30,20 @@ open class ClipboardListenerService : IClipboardListenerService.Stub() {
         return res.joinToString(" ")
     }
 
-    override fun startListening(callback: IOnClipboardChanged, useRoot: Boolean, filePath: String) {
-        if (tryRunProcess(callback, useRoot, filePath)) {
-            Log.d(TAG, "run process failed, try read logs")
-            tryReadLogs(callback, useRoot)
+    override fun startListening(
+        callback: IOnClipboardChanged,
+        useRoot: Boolean,
+        filePath: String,
+        useHiddenApi: Boolean
+    ) {
+        var success = false;
+        if (useHiddenApi) {
+            success = tryRunProcess(callback, useRoot, filePath)
+        } else {
+            success = tryReadLogs(callback, useRoot)
+        }
+        if (!success) {
+            Log.d(TAG, "error, useHiddenApi = $useHiddenApi")
         }
     }
 
@@ -48,7 +59,7 @@ open class ClipboardListenerService : IClipboardListenerService.Stub() {
             dirPath,
             "top.coclyun.clipshare.clipboard_listener.ClipboardListener"
         )
-        Log.d(TAG, "run process: ${buildCommandsWithSpace(commands)}")
+        Log.d(TAG, "try run process: ${buildCommandsWithSpace(commands)}")
         return tryRunAndWait(callback, useRoot, commands, false)
     }
 
@@ -56,7 +67,7 @@ open class ClipboardListenerService : IClipboardListenerService.Stub() {
         val fmt = "yyyy-MM-dd HH:mm:ss.SSS"
         val timeStamp = SimpleDateFormat(fmt, Locale.US).format(Date())
         val commands = arrayOf("logcat", "-T", timeStamp, "ClipboardService:E", "*:S")
-        Log.d(TAG, "startReadLogs: ${buildCommandsWithSpace(commands)}")
+        Log.d(TAG, "try read logs: ${buildCommandsWithSpace(commands)}")
         return tryRunAndWait(callback, useRoot, commands, true)
     }
 
@@ -66,6 +77,9 @@ open class ClipboardListenerService : IClipboardListenerService.Stub() {
         commands: Array<String>,
         useLog: Boolean
     ): Boolean {
+        if (stopped) {
+            return true
+        }
         var reader: BufferedReader? = null
         var error = false
         try {
@@ -88,7 +102,7 @@ open class ClipboardListenerService : IClipboardListenerService.Stub() {
                 Log.d(TAG, line!!)
                 if (useLog) {
                     callback.onChanged(line!!)
-                } else{
+                } else {
                     if (line!!.startsWith(EventEnum.onChanged.name + ":")) {
                         callback.onChanged(null)
                     }
@@ -114,14 +128,14 @@ open class ClipboardListenerService : IClipboardListenerService.Stub() {
 
     override fun stopListening() {
         Log.d(TAG, "stopListen: ")
+        stopped = true
+        process?.inputStream?.close()
+        process?.outputStream?.close()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            process?.inputStream?.close()
             process?.destroyForcibly()
-            process = null
         } else {
-            process?.inputStream?.close()
             process?.destroy()
-            process = null
         }
+        process = null
     }
 }

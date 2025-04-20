@@ -79,8 +79,7 @@ class _MyAppState extends State<MyApp> with ClipboardListener {
                         children: [
                           GestureDetector(
                             onTap: () {
-                              clipboardManager
-                                  .requestPermission(EnvironmentType.shizuku);
+                              clipboardManager.requestPermission(EnvironmentType.shizuku);
                             },
                             child: const Chip(label: Text("Request Shizuka")),
                           ),
@@ -89,8 +88,7 @@ class _MyAppState extends State<MyApp> with ClipboardListener {
                           ),
                           GestureDetector(
                             onTap: () {
-                              clipboardManager
-                                  .requestPermission(EnvironmentType.root);
+                              clipboardManager.requestPermission(EnvironmentType.root);
                             },
                             child: const Chip(label: Text("Request Root")),
                           ),
@@ -108,7 +106,9 @@ class _MyAppState extends State<MyApp> with ClipboardListener {
                             onTap: () {
                               clipboardManager
                                   .startListening(
-                                      startEnv: EnvironmentType.shizuku)
+                                startEnv: EnvironmentType.shizuku,
+                                way: ClipboardListeningWay.hiddenApi,
+                              )
                                   .then((res) {
                                 if (res) {
                                   showSnackBarSuc(
@@ -123,8 +123,7 @@ class _MyAppState extends State<MyApp> with ClipboardListener {
                                 }
                               });
                             },
-                            child: const Chip(
-                                label: Text("Start listening by Shizuku")),
+                            child: const Chip(label: Text("Start listening by Shizuku")),
                           ),
                           const SizedBox(
                             width: 10,
@@ -133,7 +132,9 @@ class _MyAppState extends State<MyApp> with ClipboardListener {
                             onTap: () {
                               clipboardManager
                                   .startListening(
-                                      startEnv: EnvironmentType.root)
+                                startEnv: EnvironmentType.root,
+                                way: ClipboardListeningWay.hiddenApi,
+                              )
                                   .then((res) {
                                 if (res) {
                                   showSnackBarSuc(
@@ -148,8 +149,7 @@ class _MyAppState extends State<MyApp> with ClipboardListener {
                                 }
                               });
                             },
-                            child: const Chip(
-                                label: Text("Start listening by Root")),
+                            child: const Chip(label: Text("Start listening by Root")),
                           ),
                           const SizedBox(
                             width: 10,
@@ -234,14 +234,13 @@ class _MyAppState extends State<MyApp> with ClipboardListener {
               ),
               GestureDetector(
                 onTap: () {
-                  clipboardManager.copy(ClipboardContentType.text,
-                      Random().nextInt(99999).toString());
+                  clipboardManager.copy(ClipboardContentType.text, Random().nextInt(99999).toString());
                 },
                 child: const Chip(label: Text("Copy Random Data")),
               ),
               GestureDetector(
                 onTap: () {
-                  clipboardManager.copy(ClipboardContentType.image,"/tmp/2025-01-16_22-29-42-6.png");
+                  clipboardManager.copy(ClipboardContentType.image, "/tmp/2025-01-16_22-29-42-6.png");
                 },
                 child: const Chip(label: Text("Copy Test Image(mannal set on code)")),
               ),

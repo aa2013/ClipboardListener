@@ -74,13 +74,26 @@ class ClipboardManager {
   ///[title] notification title text
   ///[desc] notification description text
   ///[startEnv] the listening mode you want to enable.The options are either a or b. If null, it will automatically select based on the current environment.
-  Future<bool> startListening({NotificationContentConfig? notificationContentConfig, EnvironmentType? startEnv}) {
+  Future<bool> startListening({
+    NotificationContentConfig? notificationContentConfig,
+    EnvironmentType? startEnv,
+    ClipboardListeningWay? way,
+  }) {
     var args = <String, dynamic>{};
+    assert(() {
+      if (Platform.isAndroid) {
+        return way != null;
+      }
+      return true;
+    }());
     if (startEnv != null) {
       args["env"] = startEnv.name;
       if (startEnv == EnvironmentType.none) {
         return Future(() => false);
       }
+    }
+    if (way != null) {
+      args["way"] = way.name;
     }
     if (notificationContentConfig != null) {
       args.addAll(notificationContentConfig.toJson());
@@ -89,8 +102,8 @@ class ClipboardManager {
   }
 
   /// stop listening clipboard
-  Future<void> stopListening() {
-    return _channel.invokeMethod(kStopListening);
+  Future<bool> stopListening() {
+    return _channel.invokeMethod<bool>(kStopListening).then((value) => value ?? false);
   }
 
   ///get the version for Shizuku. (Only Android)
@@ -169,6 +182,7 @@ class ClipboardManager {
     }
     return EnvironmentType.none;
   }
+
   ///end with '/' or '\'
   Future<void> setTempFileDir(String dirPath) async {
     if (!Platform.isWindows) return;

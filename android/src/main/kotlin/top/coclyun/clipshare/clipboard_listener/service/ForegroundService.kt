@@ -26,6 +26,7 @@ import rikka.shizuku.Shizuku.OnBinderDeadListener
 import rikka.shizuku.Shizuku.OnBinderReceivedListener
 import top.coclyun.clipshare.clipboard_listener.ClipboardListener
 import top.coclyun.clipshare.clipboard_listener.ClipboardListenerPlugin
+import top.coclyun.clipshare.clipboard_listener.ClipboardListeningWay
 import top.coclyun.clipshare.clipboard_listener.EnvironmentType
 import top.coclyun.clipshare.clipboard_listener.IClipboardListenerService
 import top.coclyun.clipshare.clipboard_listener.IOnClipboardChanged
@@ -58,12 +59,13 @@ class ForegroundService : Service() {
     private lateinit var mainParams: LayoutParams
     private var view: ViewGroup? = null
     private var useRoot: Boolean = false
+    private lateinit var listeningWay: ClipboardListeningWay
     private var listenerThread: Thread? = null
 
     //region Clipboard Listener
     private val clipboardListenerCallback = object : IOnClipboardChanged.Stub() {
         override fun onChanged(logLine: String?) {
-            if(logLine != null && !logLine.contains(plugin!!.config.applicationId)){
+            if (logLine != null && !logLine.contains(plugin!!.config.applicationId)) {
                 return
             }
             if (plugin!!.config.ignoreNextCopy) {
@@ -157,6 +159,19 @@ class ForegroundService : Service() {
             throw RuntimeException("Can not copy listener file")
         }
         if (plugin == null) throw Exception("plugin instance is not init")
+        val wayStr = intent?.getStringExtra("way")
+        if (wayStr == null) {
+            notifyForeground("Error", "Listening way is null")
+            throw RuntimeException("Listening way is null")
+        }
+        Log.d(TAG, "wayStr $wayStr")
+        try {
+            listeningWay = ClipboardListeningWay.valueOf(wayStr)
+            Log.d(TAG, "listeningWay $listeningWay")
+        } catch (e: Exception) {
+            notifyForeground("Error", "Can not mapping listen way for $wayStr")
+            throw RuntimeException("Can not mapping listen way for $wayStr")
+        }
         if (!useRoot) {
             if (plugin!!.serviceConnection != null) {
                 Shizuku.unbindUserService(
@@ -165,39 +180,53 @@ class ForegroundService : Service() {
                     true
                 )
             }
-            if (plugin!!.serviceConnection == null) {
-                plugin!!.serviceConnection = object : ServiceConnection {
-                    //在OriginOS系统上有概率shizuku启动会失败，可以重新尝试
-                    //https://github.com/RikkaApps/Shizuku/issues/451
-                    override fun onServiceConnected(componentName: ComponentName, binder: IBinder) {
-                        Log.d(TAG, "onServiceConnected ${componentName.className}")
-                        plugin!!.listening = true
-                        notifyForeground(
-                            plugin!!.config.serviceRunningTitle,
-                            plugin!!.config.shizukuRunningText
-                        )
-                        listenerService = IClipboardListenerService.Stub.asInterface(binder)
-                        try {
-                            startListening()
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                            plugin!!.listening = false
-                            listenerService = null
-                            Log.w(TAG, "onServiceConnected ${e.message}")
-                        }
-                    }
+            if (plugin!!.serviceConnection != null) {
+                Shizuku.unbindUserService(
+                    plugin!!.userServiceArgs!!,
+                    plugin!!.serviceConnection,
+                    true
+                )
+                plugin!!.serviceConnection = null
+            }
+            listenerService?.stopListening()
+            plugin!!.serviceConnection = object : ServiceConnection {
 
-                    override fun onServiceDisconnected(componentName: ComponentName) {
-                        listenerService?.stopListening()
+                private var service: IClipboardListenerService? = null
+
+                //在OriginOS系统上有概率shizuku启动会失败，可以重新尝试
+                //https://github.com/RikkaApps/Shizuku/issues/451
+                override fun onServiceConnected(componentName: ComponentName, binder: IBinder) {
+                    if (service != null) {
+                        service?.stopListening()
+                        return
+                    }
+                    Log.d(TAG, "onServiceConnected ${componentName.className}")
+                    plugin!!.listening = true
+                    notifyForeground(
+                        plugin!!.config.serviceRunningTitle,
+                        plugin!!.config.shizukuRunningText
+                    )
+                    listenerService = IClipboardListenerService.Stub.asInterface(binder)
+                    service = listenerService
+                    try {
+                        startListening()
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                        plugin!!.listening = false
                         listenerService = null
-                        notifyForeground(
-                            plugin!!.config.shizukuDisconnectedTitle,
-                            plugin!!.config.shizukuDisconnectedText
-                        )
+                        Log.w(TAG, "onServiceConnected ${e.message}")
                     }
                 }
-            }
 
+                override fun onServiceDisconnected(componentName: ComponentName) {
+                    listenerService?.stopListening()
+                    listenerService = null
+                    notifyForeground(
+                        plugin!!.config.shizukuDisconnectedTitle,
+                        plugin!!.config.shizukuDisconnectedText
+                    )
+                }
+            }
             Shizuku.bindUserService(plugin!!.userServiceArgs!!, plugin!!.serviceConnection!!)
         } else {
             listenerService = ClipboardListenerService()
@@ -229,9 +258,15 @@ class ForegroundService : Service() {
         listenerThread?.interrupt()
         listenerThread = Thread {
             try {
-                Log.d(TAG, "listening, useRoot $useRoot")
-                val path = File(applicationContext.getExternalFilesDir(null), listenerZipFileName).path
-                listenerService!!.startListening(clipboardListenerCallback, useRoot, path)
+                Log.d(TAG, "listening, useRoot $useRoot, listeningWay $listeningWay")
+                val path =
+                    File(applicationContext.getExternalFilesDir(null), listenerZipFileName).path
+                listenerService!!.startListening(
+                    clipboardListenerCallback,
+                    useRoot,
+                    path,
+                    listeningWay == ClipboardListeningWay.hiddenApi,
+                )
             } catch (e: Exception) {
                 e.printStackTrace()
                 Log.i(TAG, "startListening: error ${e.message} listening ${!plugin!!.listening}")
@@ -250,17 +285,19 @@ class ForegroundService : Service() {
 
     override fun onDestroy() {
         Log.i(TAG, "ForegroundService onDestroy $listenerService")
-        plugin!!.listening = false
+        plugin?.listening = false
         val t = listenerThread
         listenerThread = null
         t?.interrupt()
-//        logService?.stopReadLogs()
+        listenerService?.stopListening()
         listenerService = null
-        if (plugin!!.currentEnv == EnvironmentType.shizuku) {
+        if (plugin?.currentEnv == EnvironmentType.shizuku && plugin?.userServiceArgs != null && plugin?.serviceConnection != null) {
+            Log.i(TAG, "unbindUserService")
             Shizuku.unbindUserService(plugin!!.userServiceArgs!!, plugin!!.serviceConnection, true)
         }
         super.onDestroy()
     }
+
     //region notify
 
     private fun createNotify() {

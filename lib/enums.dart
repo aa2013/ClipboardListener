@@ -6,8 +6,7 @@ enum ClipboardContentType {
   file,
   unknown;
 
-  static ClipboardContentType parse(String value) =>
-      ClipboardContentType.values.firstWhere(
+  static ClipboardContentType parse(String value) => ClipboardContentType.values.firstWhere(
         (e) => e.name.toUpperCase() == value.toUpperCase(),
         orElse: () {
           debugPrint("ClipboardContentType '$value' unknown");
@@ -22,12 +21,25 @@ enum EnvironmentType {
   androidPre10,
   none;
 
-  static EnvironmentType parse(String value) =>
-      EnvironmentType.values.firstWhere(
+  static EnvironmentType parse(String value) => EnvironmentType.values.firstWhere(
         (e) => e.name == value,
         orElse: () {
           debugPrint("ClipboardContentType '$value' unknown");
           return EnvironmentType.none;
         },
       );
+}
+
+enum ClipboardListeningWay {
+  logs,
+  hiddenApi;
+
+  static ClipboardListeningWay parse(String value) {
+    return ClipboardListeningWay.values.firstWhere(
+      (e) => e.name.toUpperCase() == value.toUpperCase(),
+      orElse: () {
+        throw Exception("UnSupport ClipboardListeningWay $value");
+      },
+    );
+  }
 }
