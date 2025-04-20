@@ -31,11 +31,11 @@ import top.coclyun.clipshare.clipboard_listener.IClipboardListenerService
 import top.coclyun.clipshare.clipboard_listener.IOnClipboardChanged
 import top.coclyun.clipshare.clipboard_listener.R
 import top.coclyun.clipshare.clipboard_listener.copyAssetToExternalPrivateDir
-import top.coclyun.clipshare.clipboard_listener.isFileExistsInPrivateDir
 import java.io.File
 import java.lang.ref.WeakReference
 
-
+//在OriginOS系统上有概率shizuku启动会失败，可以重新尝试
+//https://github.com/RikkaApps/Shizuku/issues/451
 class ForegroundService : Service() {
     companion object {
         @JvmStatic
@@ -58,7 +58,7 @@ class ForegroundService : Service() {
     private lateinit var mainParams: LayoutParams
     private var view: ViewGroup? = null
     private var useRoot: Boolean = false
-    private var readLogThread: Thread? = null
+    private var listenerThread: Thread? = null
 
     //region Clipboard Listener
     private val clipboardListenerCallback = object : IOnClipboardChanged.Stub() {
@@ -167,6 +167,8 @@ class ForegroundService : Service() {
             }
             if (plugin!!.serviceConnection == null) {
                 plugin!!.serviceConnection = object : ServiceConnection {
+                    //在OriginOS系统上有概率shizuku启动会失败，可以重新尝试
+                    //https://github.com/RikkaApps/Shizuku/issues/451
                     override fun onServiceConnected(componentName: ComponentName, binder: IBinder) {
                         Log.d(TAG, "onServiceConnected ${componentName.className}")
                         plugin!!.listening = true
@@ -224,8 +226,8 @@ class ForegroundService : Service() {
             return
         }
         Log.d(TAG, "listening start")
-        readLogThread?.interrupt()
-        readLogThread = Thread {
+        listenerThread?.interrupt()
+        listenerThread = Thread {
             try {
                 Log.d(TAG, "listening, useRoot $useRoot")
                 val path = File(applicationContext.getExternalFilesDir(null), listenerZipFileName).path
@@ -242,15 +244,15 @@ class ForegroundService : Service() {
             Log.i(TAG, "startListening: stopped")
             notifyForeground(plugin!!.config.stopListeningTitle, plugin!!.config.stopListeningText)
         }
-        readLogThread?.isDaemon = true
-        readLogThread?.start()
+        listenerThread?.isDaemon = true
+        listenerThread?.start()
     }
 
     override fun onDestroy() {
         Log.i(TAG, "ForegroundService onDestroy $listenerService")
         plugin!!.listening = false
-        val t = readLogThread
-        readLogThread = null
+        val t = listenerThread
+        listenerThread = null
         t?.interrupt()
 //        logService?.stopReadLogs()
         listenerService = null
