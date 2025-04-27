@@ -104,7 +104,7 @@ public abstract class OnPrimaryClipChangedListenerAdapter extends IOnPrimaryClip
         } else if (removePrimaryClipChangedListenerMethodVersion == 4) {
             removePrimaryClipChangedListenerMethod.invoke(clipboard, this, pkg, tag, userId);
         } else if (removePrimaryClipChangedListenerMethodVersion == 5) {
-            removePrimaryClipChangedListenerMethod.invoke(clipboard, this, pkg, tag, devId, userId);
+            removePrimaryClipChangedListenerMethod.invoke(clipboard, this, pkg, tag, userId, devId);
         } else {
             var content = "NotMatched removeListener method version, parameters:" + Arrays.toString(removePrimaryClipChangedListenerMethod.getParameters());
             System.out.println(new Event(EventEnum.comment, content));
