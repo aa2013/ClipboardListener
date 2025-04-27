@@ -2,6 +2,7 @@ package top.coclyun.clipshare.clipboard_listener;
 
 import android.content.IClipboard;
 import android.content.IOnPrimaryClipChangedListener;
+import android.system.Os;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -25,7 +26,8 @@ public abstract class OnPrimaryClipChangedListenerAdapter extends IOnPrimaryClip
     private final int devId;
 
     public OnPrimaryClipChangedListenerAdapter(IClipboard clipboard) throws NoSuchMethodException {
-        this(clipboard, "com.android.shell", null, 2000, 0);
+        //I don't know why on some systems, such as Xiaomi, userId must be 0 to listen (although in reality UID is 2000)
+        this(clipboard, "com.android.shell", null, 0, 0);
     }
 
     public OnPrimaryClipChangedListenerAdapter(IClipboard clipboard, String pkg, String tag, int userId, int devId) throws NoSuchMethodException {
@@ -67,6 +69,7 @@ public abstract class OnPrimaryClipChangedListenerAdapter extends IOnPrimaryClip
 
     public boolean register() throws InvocationTargetException, IllegalAccessException {
         if (clipboard == null) {
+            System.out.println(new Event(EventEnum.comment, "No IClipboard instance"));
             return false;
         }
         if (addPrimaryClipChangedListenerMethodVersion == 1) {
@@ -78,12 +81,15 @@ public abstract class OnPrimaryClipChangedListenerAdapter extends IOnPrimaryClip
         } else if (addPrimaryClipChangedListenerMethodVersion == 4) {
             addPrimaryClipChangedListenerMethod.invoke(clipboard, this, pkg, tag, userId);
         } else if (addPrimaryClipChangedListenerMethodVersion == 5) {
+            //不知道为什么，在小米上面需要将devId和userId位置调换才能监听，AOSP里面是userId再devId，发现在其他手机上面调换了也ok，索性就直接换了
             addPrimaryClipChangedListenerMethod.invoke(clipboard, this, pkg, tag, userId, devId);
         } else {
             var content = "NotMatched addListener method version, parameters:" + Arrays.toString(addPrimaryClipChangedListenerMethod.getParameters());
             System.out.println(new Event(EventEnum.comment, content));
             return false;
         }
+        System.out.println(new Event(EventEnum.comment, "addPrimaryClipChangedListenerMethodVersion = " + addPrimaryClipChangedListenerMethodVersion));
+        System.out.println(new Event(EventEnum.comment,"addPrimaryClipChangedListenerMethod = "+ Arrays.toString(removePrimaryClipChangedListenerMethod.getParameters())));
         return true;
     }
 
@@ -100,7 +106,7 @@ public abstract class OnPrimaryClipChangedListenerAdapter extends IOnPrimaryClip
         } else if (removePrimaryClipChangedListenerMethodVersion == 4) {
             removePrimaryClipChangedListenerMethod.invoke(clipboard, this, pkg, tag, userId);
         } else if (removePrimaryClipChangedListenerMethodVersion == 5) {
-            removePrimaryClipChangedListenerMethod.invoke(clipboard, this, pkg, tag, userId, devId);
+            removePrimaryClipChangedListenerMethod.invoke(clipboard, this, pkg, tag, devId, userId);
         } else {
             var content = "NotMatched removeListener method version, parameters:" + Arrays.toString(removePrimaryClipChangedListenerMethod.getParameters());
             System.out.println(new Event(EventEnum.comment, content));
