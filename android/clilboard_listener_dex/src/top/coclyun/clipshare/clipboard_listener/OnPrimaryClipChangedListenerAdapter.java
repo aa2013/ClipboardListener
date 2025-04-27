@@ -2,7 +2,6 @@ package top.coclyun.clipshare.clipboard_listener;
 
 import android.content.IClipboard;
 import android.content.IOnPrimaryClipChangedListener;
-import android.system.Os;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -81,7 +80,6 @@ public abstract class OnPrimaryClipChangedListenerAdapter extends IOnPrimaryClip
         } else if (addPrimaryClipChangedListenerMethodVersion == 4) {
             addPrimaryClipChangedListenerMethod.invoke(clipboard, this, pkg, tag, userId);
         } else if (addPrimaryClipChangedListenerMethodVersion == 5) {
-            //不知道为什么，在小米上面需要将devId和userId位置调换才能监听，AOSP里面是userId再devId，发现在其他手机上面调换了也ok，索性就直接换了
             addPrimaryClipChangedListenerMethod.invoke(clipboard, this, pkg, tag, userId, devId);
         } else {
             var content = "NotMatched addListener method version, parameters:" + Arrays.toString(addPrimaryClipChangedListenerMethod.getParameters());
