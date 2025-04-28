@@ -289,7 +289,11 @@ class ForegroundService : Service() {
         val t = listenerThread
         listenerThread = null
         t?.interrupt()
-        listenerService?.stopListening()
+        try {
+            listenerService?.stopListening()
+        } catch (_: Exception) {
+
+        }
         listenerService = null
         if (plugin?.currentEnv == EnvironmentType.shizuku && plugin?.userServiceArgs != null && plugin?.serviceConnection != null) {
             Log.i(TAG, "unbindUserService")

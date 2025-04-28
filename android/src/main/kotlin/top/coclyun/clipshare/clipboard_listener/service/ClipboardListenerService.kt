@@ -137,5 +137,18 @@ open class ClipboardListenerService : IClipboardListenerService.Stub() {
             process?.destroy()
         }
         process = null
+        exit()
+    }
+
+    /**
+     * Reserved destroy method
+     */
+    override fun destroy() {
+        Log.i(TAG, "destroy")
+        System.exit(0)
+    }
+
+    override fun exit() {
+        destroy()
     }
 }
