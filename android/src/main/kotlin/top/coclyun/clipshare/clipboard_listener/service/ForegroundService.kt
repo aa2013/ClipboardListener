@@ -295,10 +295,6 @@ class ForegroundService : Service() {
 
         }
         listenerService = null
-        if (plugin?.currentEnv == EnvironmentType.shizuku && plugin?.userServiceArgs != null && plugin?.serviceConnection != null) {
-            Log.i(TAG, "unbindUserService")
-            Shizuku.unbindUserService(plugin!!.userServiceArgs!!, plugin!!.serviceConnection, true)
-        }
         super.onDestroy()
     }
 
