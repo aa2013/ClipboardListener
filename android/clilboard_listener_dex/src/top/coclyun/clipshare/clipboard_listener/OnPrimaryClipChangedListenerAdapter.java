@@ -25,7 +25,8 @@ public abstract class OnPrimaryClipChangedListenerAdapter extends IOnPrimaryClip
     private final int devId;
 
     public OnPrimaryClipChangedListenerAdapter(IClipboard clipboard) throws NoSuchMethodException {
-        this(clipboard, "com.android.shell", null, 2000, 0);
+        //I don't know why on some systems, such as Xiaomi, userId must be 0 to listen (although in reality UID is 2000)
+        this(clipboard, "com.android.shell", null, 0, 0);
     }
 
     public OnPrimaryClipChangedListenerAdapter(IClipboard clipboard, String pkg, String tag, int userId, int devId) throws NoSuchMethodException {
@@ -67,6 +68,7 @@ public abstract class OnPrimaryClipChangedListenerAdapter extends IOnPrimaryClip
 
     public boolean register() throws InvocationTargetException, IllegalAccessException {
         if (clipboard == null) {
+            System.out.println(new Event(EventEnum.comment, "No IClipboard instance"));
             return false;
         }
         if (addPrimaryClipChangedListenerMethodVersion == 1) {
@@ -84,6 +86,8 @@ public abstract class OnPrimaryClipChangedListenerAdapter extends IOnPrimaryClip
             System.out.println(new Event(EventEnum.comment, content));
             return false;
         }
+        System.out.println(new Event(EventEnum.comment, "addPrimaryClipChangedListenerMethodVersion = " + addPrimaryClipChangedListenerMethodVersion));
+        System.out.println(new Event(EventEnum.comment,"addPrimaryClipChangedListenerMethod = "+ Arrays.toString(removePrimaryClipChangedListenerMethod.getParameters())));
         return true;
     }
 
