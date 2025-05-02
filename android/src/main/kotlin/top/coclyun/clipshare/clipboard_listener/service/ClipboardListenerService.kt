@@ -18,6 +18,7 @@ open class ClipboardListenerService : IClipboardListenerService.Stub() {
     private val TAG = "ClipboardListenerService"
     private var process: Process? = null
     private var stopped: Boolean = false
+    private var isRootMode: Boolean = false;
     private fun buildCommandsWithSpace(commands: Array<String>): String {
         val res = Array(commands.size) { "" }
         for (i in commands.indices) {
@@ -36,6 +37,7 @@ open class ClipboardListenerService : IClipboardListenerService.Stub() {
         filePath: String,
         useHiddenApi: Boolean
     ) {
+        isRootMode = useRoot
         var success = false;
         if (useHiddenApi) {
             success = tryRunProcess(callback, useRoot, filePath)
@@ -127,7 +129,7 @@ open class ClipboardListenerService : IClipboardListenerService.Stub() {
     }
 
     override fun stopListening() {
-        Log.d(TAG, "stopListen: ")
+        Log.d(TAG, "stopListening")
         stopped = true
         process?.inputStream?.close()
         process?.outputStream?.close()
@@ -137,7 +139,6 @@ open class ClipboardListenerService : IClipboardListenerService.Stub() {
             process?.destroy()
         }
         process = null
-        exit()
     }
 
     /**
@@ -145,7 +146,9 @@ open class ClipboardListenerService : IClipboardListenerService.Stub() {
      */
     override fun destroy() {
         Log.i(TAG, "destroy")
-        System.exit(0)
+        if(!isRootMode) {
+            System.exit(0)
+        }
     }
 
     override fun exit() {

@@ -27,7 +27,6 @@ import rikka.shizuku.Shizuku.OnBinderReceivedListener
 import top.coclyun.clipshare.clipboard_listener.ClipboardListener
 import top.coclyun.clipshare.clipboard_listener.ClipboardListenerPlugin
 import top.coclyun.clipshare.clipboard_listener.ClipboardListeningWay
-import top.coclyun.clipshare.clipboard_listener.EnvironmentType
 import top.coclyun.clipshare.clipboard_listener.IClipboardListenerService
 import top.coclyun.clipshare.clipboard_listener.IOnClipboardChanged
 import top.coclyun.clipshare.clipboard_listener.R
@@ -164,7 +163,6 @@ class ForegroundService : Service() {
             notifyForeground("Error", "Listening way is null")
             throw RuntimeException("Listening way is null")
         }
-        Log.d(TAG, "wayStr $wayStr")
         try {
             listeningWay = ClipboardListeningWay.valueOf(wayStr)
             Log.d(TAG, "listeningWay $listeningWay")
@@ -176,19 +174,11 @@ class ForegroundService : Service() {
             if (plugin!!.serviceConnection != null) {
                 Shizuku.unbindUserService(
                     plugin!!.userServiceArgs!!,
-                    plugin!!.serviceConnection!!,
-                    true
-                )
-            }
-            if (plugin!!.serviceConnection != null) {
-                Shizuku.unbindUserService(
-                    plugin!!.userServiceArgs!!,
                     plugin!!.serviceConnection,
                     true
                 )
                 plugin!!.serviceConnection = null
             }
-            listenerService?.stopListening()
             plugin!!.serviceConnection = object : ServiceConnection {
 
                 private var service: IClipboardListenerService? = null
@@ -227,7 +217,9 @@ class ForegroundService : Service() {
                     )
                 }
             }
-            Shizuku.bindUserService(plugin!!.userServiceArgs!!, plugin!!.serviceConnection!!)
+            Handler().postDelayed({
+                Shizuku.bindUserService(plugin!!.userServiceArgs!!, plugin!!.serviceConnection!!)
+            }, 500)
         } else {
             listenerService = ClipboardListenerService()
             notifyForeground(
@@ -290,7 +282,7 @@ class ForegroundService : Service() {
         listenerThread = null
         t?.interrupt()
         try {
-            listenerService?.stopListening()
+            listenerService?.exit()
         } catch (_: Exception) {
 
         }
