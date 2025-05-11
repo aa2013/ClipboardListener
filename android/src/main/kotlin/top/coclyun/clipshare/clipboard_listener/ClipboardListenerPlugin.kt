@@ -11,6 +11,8 @@ import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.provider.Settings
+import android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION
 import android.util.Log
 import android.widget.Toast
 import androidx.core.content.ContextCompat
@@ -185,12 +187,14 @@ class ClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
                 try {
                     stopListening()
                     result.success(true)
-                }catch (e:Exception){
+                } catch (e: Exception) {
                     e.printStackTrace()
                     result.success(false)
                 }
             }
+
             GET_SHIZUKUVERSION -> result.success(Shizuku.getVersion())
+
             CHECK_IS_RUNNING -> {
                 if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
                     result.success(true)
@@ -235,7 +239,7 @@ class ClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
                 result.success(null)
             }
 
-            COPY ->
+            COPY -> {
                 try {
                     config.ignoreNextCopy = true
                     val type = call.argument<String>("type")
@@ -274,6 +278,8 @@ class ClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
                     config.ignoreNextCopy = false;
                     result.success(false)
                 }
+            }
+
         }
     }
 

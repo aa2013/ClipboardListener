@@ -73,10 +73,10 @@ class ClipboardManager {
   ///start listening clipboard change event
   ///[title] notification title text
   ///[desc] notification description text
-  ///[startEnv] the listening mode you want to enable.The options are either a or b. If null, it will automatically select based on the current environment.
+  ///[env] the listening mode you want to enable.The options are either a or b. If null, it will automatically select based on the current environment.
   Future<bool> startListening({
     NotificationContentConfig? notificationContentConfig,
-    EnvironmentType? startEnv,
+    EnvironmentType? env,
     ClipboardListeningWay? way,
   }) {
     var args = <String, dynamic>{};
@@ -86,9 +86,9 @@ class ClipboardManager {
       }
       return true;
     }());
-    if (startEnv != null) {
-      args["env"] = startEnv.name;
-      if (startEnv == EnvironmentType.none) {
+    if (env != null) {
+      args["env"] = env.name;
+      if (env == EnvironmentType.none) {
         return Future(() => false);
       }
     }
