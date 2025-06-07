@@ -279,7 +279,7 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
 
                 //region Linux
                 Visibility(
-                  visible: Platform.isLinux,
+                  visible: !Platform.isAndroid,
                   child: Column(
                     children: [
                       GestureDetector(
