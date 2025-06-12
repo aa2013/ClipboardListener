@@ -14,6 +14,7 @@ import java.io.OutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.min
 
 
 open class ClipboardListener(
@@ -21,7 +22,7 @@ open class ClipboardListener(
     private var context: Context
 ) {
     interface ClipboardObserver {
-        fun onClipboardChanged(type: ClipboardContentType, content: String)
+        fun onClipboardChanged(type: ClipboardContentType, content: String, packageName: String?)
     }
 
     companion object {
@@ -53,11 +54,13 @@ open class ClipboardListener(
                 context,
                 ClipboardManager::class.java
             )
-            cm!!.addPrimaryClipChangedListener(this::onClipboardChanged)
+            cm!!.addPrimaryClipChangedListener {
+                onClipboardChanged(null)
+            }
         }
     }
 
-    fun onClipboardChanged() {
+    fun onClipboardChanged(packageName: String?) {
         val env = plugin.currentEnv;
         if (!plugin.listening && (env == EnvironmentType.shizuku || env == EnvironmentType.root)) {
             return
@@ -67,9 +70,8 @@ open class ClipboardListener(
             val description = cm!!.primaryClipDescription!!
             val label = description.label;
             var type = ClipboardContentType.Text;
-            var content =
-                (if (item.text == null) item.coerceToText(context) else item.text).toString()
-            Log.d(TAG, "label:$label, uri:${item.uri}, content: $content")
+            var content = (item.text ?: item.coerceToText(context)).toString()
+            Log.d(TAG, "label:$label, uri:${item.uri}, content: ${content.substring(0, min(content.length,20))}")
             if (item.uri != null) {
                 val contentResolver = context.contentResolver
                 val mimeType = contentResolver.getType(item.uri);
@@ -105,9 +107,10 @@ open class ClipboardListener(
                 }
             }
             for (observer in observers) {
-                observer.onClipboardChanged(type, content)
+                observer.onClipboardChanged(type, content, packageName)
             }
         } catch (e: Exception) {
+            e.printStackTrace()
             Log.d(TAG, "onClipboardChanged error: ${e.message}")
         }
     }

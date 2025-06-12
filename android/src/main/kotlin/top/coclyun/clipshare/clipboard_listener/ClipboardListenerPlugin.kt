@@ -1,18 +1,20 @@
 package top.coclyun.clipshare.clipboard_listener
 
+import android.accessibilityservice.AccessibilityService
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.ActivityManager
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.ServiceConnection
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.os.IBinder
 import android.provider.Settings
-import android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION
 import android.util.Log
 import android.widget.Toast
 import androidx.core.content.ContextCompat
@@ -24,20 +26,38 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import rikka.shizuku.Shizuku
 import rikka.shizuku.Shizuku.UserServiceArgs
+import top.coclyun.clipshare.clipboard_listener.service.ActivityChangedService
+import top.coclyun.clipshare.clipboard_listener.service.ClipboardListenerService
 import top.coclyun.clipshare.clipboard_listener.service.ForegroundService
+import top.coclyun.clipshare.clipboard_listener.service.LatestWriteClipboardPkgService
+import top.coclyun.clipshare.clipboard_listener.utils.getAppIconAsBase64
+import top.coclyun.clipshare.clipboard_listener.utils.getAppNameByPackageName
 import java.io.DataOutputStream
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 const val CHANNEL_NAME = "top.coclyun.clipshare/clipboard_listener"
 const val ON_CLIPBOARD_CHANGED = "onClipboardChanged"
 const val ON_PERMISSION_STATUS_CHANGED = "onPermissionStatusChanged"
 const val START_LISTENING = "startListening"
 const val STOP_LISTENING = "stopListening"
+const val GET_LATEST_WRITE_CLIPBOARD_SOURCE = "getLatestWriteClipboardSource"
 const val GET_SHIZUKUVERSION = "getShizukuVersion"
 const val CHECK_IS_RUNNING = "checkIsRunning"
 const val CHECK_PERMISSION = "checkPermission"
 const val REQUEST_PERMISSION = "requestPermission"
+const val CHECK_ACCESSIBILITY = "checkAccessibility"
+const val REQUEST_ACCESSIBILITY = "requestAccessibility"
 const val COPY = "copy"
 
 /** ClipboardListenerPlugin */
@@ -52,8 +72,13 @@ class ClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
     var config: Config = Config()
     var mainActivity: Activity? = null
     var listening: Boolean = false
-    var userServiceArgs: UserServiceArgs? = null
-    var serviceConnection: ServiceConnection? = null
+    var listeningServiceArgs: UserServiceArgs? = null
+    var listeningServiceConn: ServiceConnection? = null
+    var clipboardSourceArgs: UserServiceArgs? = null
+    var clipboardSourceServiceConn: ServiceConnection? = null
+    var latestWriteClipboardPkgService: ILatestWriteClipboardPkgService? = null
+    val latestWriteClipboardPkgShellFileName = "readLastWriteClipboardPkg.sh"
+    private val clipboardSourceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     companion object {
         @JvmStatic
@@ -65,12 +90,12 @@ class ClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
         channel = MethodChannel(flutterPluginBinding.binaryMessenger, CHANNEL_NAME)
         context = flutterPluginBinding.applicationContext
         config.applicationId = context.applicationInfo.packageName
-        userServiceArgs = UserServiceArgs(
-            android.content.ComponentName(
+        listeningServiceArgs = UserServiceArgs(
+            ComponentName(
                 config.applicationId,
-                top.coclyun.clipshare.clipboard_listener.service.ClipboardListenerService::class.java.name
+                ClipboardListenerService::class.java.name
             )
-        ).daemon(false).processNameSuffix("service")
+        ).daemon(false).processNameSuffix("listening-service")
         Log.d(TAG, "applicationId: ${config.applicationId}")
         Shizuku.addRequestPermissionResultListener(this);
         currentEnv = getCurrentEnvironment()
@@ -79,6 +104,7 @@ class ClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
         ClipboardListener.instance.addObserver(this)
         channel.setMethodCallHandler(this)
         Log.d(TAG, "currentEnv $currentEnv")
+        initClipboardSourceShizukuService()
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
@@ -90,197 +116,296 @@ class ClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
 
     override fun onMethodCall(call: MethodCall, result: Result) {
         when (call.method) {
-            START_LISTENING -> {
-                val envStr = call.argument<String>("env")
-                val wayStr = call.argument<String>("way")
-                var env: EnvironmentType? = null
-                var way: ClipboardListeningWay? = null
+            START_LISTENING -> onStartListeningCalled(call, result)
 
-                //region 工作环境参数
-                if (envStr != null) {
-                    try {
-                        env = EnvironmentType.valueOf(envStr)
-                        if (env == EnvironmentType.androidPre10) {
-                            result.success(true)
-                            return
-                        }
-                    } catch (_: Exception) {
+            STOP_LISTENING -> onStopListeningCalled(call, result)
 
-                    }
-                }
-                //endregion
+            GET_SHIZUKUVERSION -> onGetShizukuVersionCalled(call, result)
 
-                //region 监听方式参数
-                if (wayStr == null) {
-                    result.success(false)
+            CHECK_IS_RUNNING -> onCheckIsRunningCalled(call, result)
+
+            CHECK_PERMISSION -> onCheckPermissionCalled(call, result)
+
+            REQUEST_PERMISSION -> onRequestPermissionCalled(call, result)
+
+            COPY -> onCopyCalled(call, result)
+
+            GET_LATEST_WRITE_CLIPBOARD_SOURCE -> onGetLatestWriteClipboardSourceCalled(
+                call,
+                result
+            )
+
+            CHECK_ACCESSIBILITY -> checkAccessibility(call, result)
+
+            REQUEST_ACCESSIBILITY -> requestAccessibility(call, result)
+        }
+    }
+
+    //region Flutter Method Channel Events
+
+    private fun onStartListeningCalled(call: MethodCall, result: Result) {
+        val envStr = call.argument<String>("env")
+        val wayStr = call.argument<String>("way")
+        var env: EnvironmentType? = null
+        var way: ClipboardListeningWay? = null
+
+        //region 工作环境参数
+        if (envStr != null) {
+            try {
+                env = EnvironmentType.valueOf(envStr)
+                if (env == EnvironmentType.androidPre10) {
+                    result.success(true)
                     return
                 }
-                try {
-                    way = ClipboardListeningWay.valueOf(wayStr)
-                } catch (_: Exception) {
-                    result.success(false)
-                    return
-                }
-                //endregion
+            } catch (_: Exception) {
 
-                //region 通知参数赋值
-                config = Config().apply {
-                    applicationId = config.applicationId
-                    ignoreNextCopy = config.ignoreNextCopy
-                    //region 通知参数赋值
-                    call.argument<String>("errorTitle")?.let {
-                        errorTitle = it
-                    }
-                    call.argument<String>("errorTextPrefix")?.let {
-                        errorTextPrefix = it
-                    }
+            }
+        }
+        //endregion
 
-                    call.argument<String>("stopListeningTitle")?.let {
-                        stopListeningTitle = it
-                    }
+        //region 监听方式参数
+        if (wayStr == null) {
+            result.success(false)
+            return
+        }
+        try {
+            way = ClipboardListeningWay.valueOf(wayStr)
+        } catch (_: Exception) {
+            result.success(false)
+            return
+        }
+        //endregion
 
-                    call.argument<String>("stopListeningText")?.let {
-                        stopListeningText = it
-                    }
-
-                    call.argument<String>("serviceRunningTitle")?.let {
-                        serviceRunningTitle = it
-                    }
-
-                    call.argument<String>("shizukuRunningText")?.let {
-                        shizukuRunningText = it
-                    }
-
-                    call.argument<String>("rootRunningText")?.let {
-                        rootRunningText = it
-                    }
-
-                    call.argument<String>("shizukuDisconnectedTitle")?.let {
-                        shizukuDisconnectedTitle = it
-                    }
-
-                    call.argument<String>("shizukuDisconnectedText")?.let {
-                        shizukuDisconnectedText = it
-                    }
-
-                    call.argument<String>("waitingRunningTitle")?.let {
-                        waitingRunningTitle = it
-                    }
-
-                    call.argument<String>("waitingRunningText")?.let {
-                        waitingRunningText = it
-                    }
-                    //endregion
-                }
-                val cfgClz = config::class.java
-                for (field in cfgClz.declaredFields) {
-                    field.isAccessible = true
-                    val value = call.argument<String>(field.name)
-                    value?.let { field.set(config, value) }
-                }
-                //endregion
-
-                result.success(startListeningClipboard(env, way))
+        //region 通知参数赋值
+        config = Config().apply {
+            applicationId = config.applicationId
+            ignoreNextCopy = config.ignoreNextCopy
+            //region 通知参数赋值
+            call.argument<String>("errorTitle")?.let {
+                errorTitle = it
+            }
+            call.argument<String>("errorTextPrefix")?.let {
+                errorTextPrefix = it
             }
 
-            STOP_LISTENING -> {
+            call.argument<String>("stopListeningTitle")?.let {
+                stopListeningTitle = it
+            }
+
+            call.argument<String>("stopListeningText")?.let {
+                stopListeningText = it
+            }
+
+            call.argument<String>("serviceRunningTitle")?.let {
+                serviceRunningTitle = it
+            }
+
+            call.argument<String>("shizukuRunningText")?.let {
+                shizukuRunningText = it
+            }
+
+            call.argument<String>("rootRunningText")?.let {
+                rootRunningText = it
+            }
+
+            call.argument<String>("shizukuDisconnectedTitle")?.let {
+                shizukuDisconnectedTitle = it
+            }
+
+            call.argument<String>("shizukuDisconnectedText")?.let {
+                shizukuDisconnectedText = it
+            }
+
+            call.argument<String>("waitingRunningTitle")?.let {
+                waitingRunningTitle = it
+            }
+
+            call.argument<String>("waitingRunningText")?.let {
+                waitingRunningText = it
+            }
+            //endregion
+        }
+        val cfgClz = config::class.java
+        for (field in cfgClz.declaredFields) {
+            field.isAccessible = true
+            val value = call.argument<String>(field.name)
+            value?.let { field.set(config, value) }
+        }
+        //endregion
+
+        val res = startListeningClipboard(env, way)
+        startClipboardSourceService(env)
+        result.success(res)
+    }
+
+    private fun onStopListeningCalled(call: MethodCall, result: Result) {
+        try {
+            stopListening()
+            result.success(true)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            result.success(false)
+        }
+    }
+
+    private fun onGetShizukuVersionCalled(call: MethodCall, result: Result) {
+        result.success(Shizuku.getVersion())
+    }
+
+    private fun onCheckIsRunningCalled(call: MethodCall, result: Result) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            result.success(true)
+        }
+        result.success(listening)
+    }
+
+    private fun onCheckPermissionCalled(call: MethodCall, result: Result) {
+        val envName = call.argument<String>("env")
+        try {
+            val env = EnvironmentType.valueOf(envName!!)
+            val hasPermission = when (env) {
+                EnvironmentType.shizuku -> checkShizukuPermission()
+                EnvironmentType.root -> checkRootPermission()
+                EnvironmentType.androidPre10 -> checkAndroidPre10()
+            }
+            result.success(hasPermission)
+        } catch (e: Exception) {
+            result.success(false)
+        }
+    }
+
+    private fun onRequestPermissionCalled(call: MethodCall, result: Result) {
+        val envName = call.argument<String>("env")
+        val env = EnvironmentType.valueOf(envName!!)
+        when (env) {
+            EnvironmentType.shizuku -> {
                 try {
-                    stopListening()
-                    result.success(true)
+                    Shizuku.requestPermission(requestShizukuCode)
                 } catch (e: Exception) {
-                    e.printStackTrace()
-                    result.success(false)
+                    onPermissionStatusChanged(EnvironmentType.shizuku, false)
                 }
             }
 
-            GET_SHIZUKUVERSION -> result.success(Shizuku.getVersion())
-
-            CHECK_IS_RUNNING -> {
-                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
-                    result.success(true)
-                }
-                result.success(listening)
+            EnvironmentType.root -> {
+                val granted = checkRootPermission()
+                onPermissionStatusChanged(EnvironmentType.root, granted)
             }
 
-            CHECK_PERMISSION -> {
-                val envName = call.argument<String>("env")
-                try {
-                    val env = EnvironmentType.valueOf(envName!!)
-                    val hasPermission = when (env) {
-                        EnvironmentType.shizuku -> checkShizukuPermission()
-                        EnvironmentType.root -> checkRootPermission()
-                        EnvironmentType.androidPre10 -> checkAndroidPre10()
-                    }
-                    result.success(hasPermission)
-                } catch (e: Exception) {
-                    result.success(false)
+            else -> {}
+        }
+        result.success(null)
+    }
+
+    private fun onCopyCalled(call: MethodCall, result: Result) {
+        try {
+            config.ignoreNextCopy = true
+            val type = call.argument<String>("type")
+            val content = call.argument<String>("content")
+            // 获取剪贴板管理器
+            val clipboardManager = ContextCompat.getSystemService(
+                context,
+                ClipboardManager::class.java
+            ) as ClipboardManager
+            val contentType = ClipboardContentType.parse(type!!)
+            Log.d(TAG, "onMethodCall: Copy $contentType")
+            when (contentType) {
+                ClipboardContentType.Text -> {
+                    // 创建一个剪贴板数据
+                    val clipData = ClipData.newPlainText("text", content)
+                    // 将数据放入剪贴板
+                    clipboardManager.setPrimaryClip(clipData)
+                }
+
+                ClipboardContentType.Image -> {
+                    val uri =
+                        Uri.parse("content://${context.packageName}.FileProvider/$content")
+                    val clipData =
+                        ClipData.newUri(
+                            context.contentResolver,
+                            "image",
+                            uri
+                        )
+                    // 将数据放入剪贴板
+                    clipboardManager.setPrimaryClip(clipData)
                 }
             }
+            result.success(true)
 
-            REQUEST_PERMISSION -> {
-                val envName = call.argument<String>("env")
-                val env = EnvironmentType.valueOf(envName!!)
-                when (env) {
-                    EnvironmentType.shizuku -> {
-                        try {
-                            Shizuku.requestPermission(requestShizukuCode)
-                        } catch (e: Exception) {
-                            onPermissionStatusChanged(EnvironmentType.shizuku, false)
-                        }
-                    }
+        } catch (e: Exception) {
+            config.ignoreNextCopy = false;
+            result.success(false)
+        }
+    }
 
-                    EnvironmentType.root -> {
-                        val granted = checkRootPermission()
-                        onPermissionStatusChanged(EnvironmentType.root, granted)
-                    }
+    private fun onGetLatestWriteClipboardSourceCalled(call: MethodCall, result: Result) {
+        clipboardSourceScope.launch {
+            try {
+                Log.d(
+                    TAG,
+                    "$GET_LATEST_WRITE_CLIPBOARD_SOURCE latestWriteClipboardPkgService: $latestWriteClipboardPkgService"
+                )
 
-                    else -> {}
+                val source = withContext(Dispatchers.IO) {
+                    latestWriteClipboardPkgService?.latestWriteClipbaordAppSource
+                } ?: run {
+                    result.success(null)
+                    return@launch
                 }
+
+                // 处理source数据
+                val (pkg, totalMsStr) = source.split(",")
+                val totalMs = totalMsStr.toLongOrNull() ?: 0L
+
+                // 返回结果
+                result.success(getClipboardSource(pkg, totalMs))
+
+            } catch (e: Exception) {
+                Log.e(TAG, "Error getting clipboard source", e)
                 result.success(null)
             }
-
-            COPY -> {
-                try {
-                    config.ignoreNextCopy = true
-                    val type = call.argument<String>("type")
-                    val content = call.argument<String>("content")
-                    // 获取剪贴板管理器
-                    val clipboardManager = ContextCompat.getSystemService(
-                        context,
-                        ClipboardManager::class.java
-                    ) as ClipboardManager
-                    val contentType = ClipboardContentType.parse(type!!)
-                    Log.d(TAG, "onMethodCall: Copy $contentType")
-                    when (contentType) {
-                        ClipboardContentType.Text -> {
-                            // 创建一个剪贴板数据
-                            val clipData = ClipData.newPlainText("text", content)
-                            // 将数据放入剪贴板
-                            clipboardManager.setPrimaryClip(clipData)
-                        }
-
-                        ClipboardContentType.Image -> {
-                            val uri =
-                                Uri.parse("content://${context.packageName}.FileProvider/$content")
-                            val clipData =
-                                ClipData.newUri(
-                                    context.contentResolver,
-                                    "image",
-                                    uri
-                                )
-                            // 将数据放入剪贴板
-                            clipboardManager.setPrimaryClip(clipData)
-                        }
-                    }
-                    result.success(true)
-
-                } catch (e: Exception) {
-                    config.ignoreNextCopy = false;
-                    result.success(false)
-                }
-            }
-
         }
+    }
+
+    private fun checkAccessibility(call: MethodCall, result: Result) {
+        result.success(isAccessibilityServiceEnabled(context, ActivityChangedService::class.java))
+    }
+
+    fun isAccessibilityServiceEnabled(
+        context: Context,
+        service: Class<out AccessibilityService?>
+    ): Boolean {
+        val prefString = Settings.Secure.getString(
+            context.getContentResolver(),
+            Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+        )
+        return prefString != null && prefString.contains(context.getPackageName() + "/" + service.getName())
+    }
+
+    private fun requestAccessibility(call: MethodCall, result: Result) {
+        val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+        mainActivity?.startActivity(intent)
+    }
+
+    //endregion
+
+    private fun getClipboardSource(pkg: String, timeMs: Long?): Map<String, String?> {
+        var time: String? = null
+        if (timeMs != null) {
+            // 获取当前时间并减去毫秒数
+            val currentTime = Date()
+            val adjustedTime = Date(currentTime.time - timeMs)
+
+            // 定义格式化器
+            val formatter = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault())
+            time = formatter.format(adjustedTime)
+        }
+
+        return mapOf(
+            "id" to pkg,
+            "name" to getAppNameByPackageName(context, pkg),
+            "time" to time,
+            "iconB64" to getAppIconAsBase64(context, pkg)
+        )
     }
 
     override fun onRequestPermissionResult(requestCode: Int, grantResult: Int) {
@@ -293,11 +418,24 @@ class ClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
         }
     }
 
-    override fun onClipboardChanged(type: ClipboardContentType, content: String) {
+    override fun onClipboardChanged(
+        type: ClipboardContentType,
+        content: String,
+        pkg: String?
+    ) {
+        Log.d(TAG, "onClipboardChanged $pkg")
         if (config.ignoreNextCopy) return
+        var source: Map<String, String?>? = null
+        if (pkg != null) {
+            source = getClipboardSource(pkg, null)
+        }
         channel.invokeMethod(
             ON_CLIPBOARD_CHANGED,
-            mapOf("content" to content, "type" to type.name)
+            mapOf(
+                "content" to content,
+                "type" to type.name,
+                "source" to source
+            )
         )
     }
 
@@ -346,7 +484,108 @@ class ClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
     private fun stopListening() {
         val serviceIntent = Intent(context, ForegroundService::class.java)
         listening = false
+        stopClipboardSourceService()
         context.stopService(serviceIntent)
+    }
+
+    private fun initClipboardSourceShizukuService() {
+        if (!copyAssetToExternalPrivateDir(
+                context,
+                latestWriteClipboardPkgShellFileName,
+                latestWriteClipboardPkgShellFileName
+            )
+        ) {
+            Log.w(TAG, "Can not copy file $latestWriteClipboardPkgShellFileName")
+        }
+        clipboardSourceArgs = UserServiceArgs(
+            ComponentName(
+                config.applicationId,
+                LatestWriteClipboardPkgService::class.java.name
+            )
+        ).daemon(false).processNameSuffix("clipboard-service-service")
+        clipboardSourceServiceConn = object : ServiceConnection {
+            private var service: ILatestWriteClipboardPkgService? = null
+            override fun onServiceConnected(name: ComponentName, binder: IBinder) {
+                if (service != null) {
+                    service?.destroy()
+                    return
+                }
+                Log.d(TAG, "onServiceConnected ${name.className}")
+                latestWriteClipboardPkgService =
+                    ILatestWriteClipboardPkgService.Stub.asInterface(binder)
+                service = latestWriteClipboardPkgService
+                try {
+                    val path =
+                        File(
+                            context.getExternalFilesDir(null),
+                            latestWriteClipboardPkgShellFileName
+                        ).path
+                    latestWriteClipboardPkgService?.start(
+                        path,
+                        false
+                    )
+                } catch (e: Exception) {
+                    latestWriteClipboardPkgService = null
+                    service = null
+                    e.printStackTrace()
+                    Log.d(TAG, "onServiceConnected Error: ${e.message}")
+                }
+            }
+
+            override fun onServiceDisconnected(name: ComponentName) {
+                try {
+                    latestWriteClipboardPkgService?.destroy()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+                Log.w(TAG, "onServiceDisconnected ${name.className}")
+            }
+
+        }
+    }
+
+    private fun startClipboardSourceService(env: EnvironmentType?): Boolean {
+        if (env == null || env == EnvironmentType.androidPre10) {
+            return false;
+        }
+        if (latestWriteClipboardPkgService != null) return false
+        try {
+            val isRootMode = env == EnvironmentType.root
+            if (isRootMode) {
+                latestWriteClipboardPkgService = LatestWriteClipboardPkgService()
+                latestWriteClipboardPkgService?.start(
+                    latestWriteClipboardPkgShellFileName,
+                    true
+                )
+            } else {
+                if (clipboardSourceArgs != null && clipboardSourceServiceConn != null) {
+                    Shizuku.bindUserService(clipboardSourceArgs!!, clipboardSourceServiceConn!!)
+                } else {
+                    return false
+                }
+            }
+            return true
+        } catch (e: Exception) {
+            e.printStackTrace()
+            Log.e(TAG, "startClipboardSourceService failed! Error: ${e.message}")
+        }
+        return false
+    }
+
+    private fun stopClipboardSourceService() {
+        try {
+            latestWriteClipboardPkgService?.destroy()
+            latestWriteClipboardPkgService = null
+            if (listeningServiceArgs != null && clipboardSourceServiceConn != null) {
+                Shizuku.unbindUserService(
+                    listeningServiceArgs!!,
+                    clipboardSourceServiceConn!!,
+                    true
+                )
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     private fun onPermissionStatusChanged(env: EnvironmentType, isGranted: Boolean) {
@@ -453,12 +692,14 @@ class ClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
 
     override fun onDetachedFromActivityForConfigChanges() {
         mainActivity = null
+        clipboardSourceScope.cancel()
     }
 
 
     override fun onDetachedFromActivity() {
         mainActivity = null
         stopListening()
+        clipboardSourceScope.cancel()
     }
     //endregion
 }
