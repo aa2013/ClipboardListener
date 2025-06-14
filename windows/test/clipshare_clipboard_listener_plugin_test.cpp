@@ -8,9 +8,9 @@
 #include <string>
 #include <variant>
 
-#include "clipboard_listener_plugin.h"
+#include "clipshare_clipboard_listener_plugin.h"
 
-namespace clipboard_listener {
+namespace clipshare_clipboard_listener {
 namespace test {
 
 namespace {

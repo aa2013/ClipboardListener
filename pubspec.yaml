@@ -43,9 +43,9 @@ flutter:
     platforms:
       android:
         package: top.coclyun.clipshare.clipboard_listener
-        pluginClass: ClipboardListenerPlugin
+        pluginClass: ClipshareClipboardListenerPlugin
       windows:
-        pluginClass: ClipboardListenerPluginCApi
+        pluginClass: ClipshareClipboardListenerPluginCApi
       linux:
         pluginClass: ClipboardListenerPlugin
 

@@ -19,7 +19,7 @@ import kotlin.math.min
 
 
 open class ClipboardListener(
-    private var plugin: ClipboardListenerPlugin,
+    private var plugin: ClipshareClipboardListenerPlugin,
     private var context: Context
 ) {
     interface ClipboardObserver {
@@ -29,7 +29,7 @@ open class ClipboardListener(
     companion object {
         @SuppressLint("StaticFieldLeak")
         private var _instance: ClipboardListener? = null
-        fun init(plugin: ClipboardListenerPlugin, context: Context): ClipboardListener {
+        fun init(plugin: ClipshareClipboardListenerPlugin, context: Context): ClipboardListener {
             _instance = ClipboardListener(plugin, context)
             return _instance!!
         }

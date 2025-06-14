@@ -5,7 +5,7 @@
 cmake_minimum_required(VERSION 3.14)
 
 # Project-level configuration.
-set(PROJECT_NAME "clipboard_listener")
+set(PROJECT_NAME "clipshare_clipboard_listener")
 project(${PROJECT_NAME} LANGUAGES CXX)
 
 # Explicitly opt in to modern CMake behaviors to avoid warnings with recent
@@ -14,20 +14,20 @@ cmake_policy(VERSION 3.14...3.25)
 
 # This value is used when generating builds using this plugin, so it must
 # not be changed
-set(PLUGIN_NAME "clipboard_listener_plugin")
+set(PLUGIN_NAME "clipshare_clipboard_listener_plugin")
 
 # Any new source files that you add to the plugin should be added here.
 list(APPEND PLUGIN_SOURCES
-        "clipboard_listener_plugin.cpp"
-        "clipboard_listener_plugin.h"
+        "clipshare_clipboard_listener_plugin.cpp"
+        "clipshare_clipboard_listener_plugin.h"
         "listening_hidden_window.cpp"
 )
 
 # Define the plugin library target. Its name must not be changed (see comment
 # on PLUGIN_NAME above).
 add_library(${PLUGIN_NAME} SHARED
-        "include/clipboard_listener/clipboard_listener_plugin_c_api.h"
-        "clipboard_listener_plugin_c_api.cpp"
+        "include/clipshare_clipboard_listener/clipshare_clipboard_listener_plugin_c_api.h"
+        "clipshare_clipboard_listener_plugin_c_api.cpp"
         ${PLUGIN_SOURCES}
 )
 
@@ -82,7 +82,7 @@ if (${include_${PROJECT_NAME}_tests})
     # The plugin's C API is not very useful for unit testing, so build the sources
     # directly into the test binary rather than using the DLL.
     add_executable(${TEST_RUNNER}
-            test/clipboard_listener_plugin_test.cpp
+            test/clipshare_clipboard_listener_plugin_test.cpp
             ${PLUGIN_SOURCES}
     )
     apply_standard_settings(${TEST_RUNNER})

@@ -16,7 +16,7 @@ import org.mockito.Mockito
 internal class ClipboardListenerProcessPluginTest {
   @Test
   fun onMethodCall_getPlatformVersion_returnsExpectedValue() {
-    val plugin = ClipboardListenerPlugin()
+    val plugin = ClipshareClipboardListenerPlugin()
 
     val call = MethodCall("getPlatformVersion", null)
     val mockResult: MethodChannel.Result = Mockito.mock(MethodChannel.Result::class.java)

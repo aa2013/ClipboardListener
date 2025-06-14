@@ -25,7 +25,7 @@ import rikka.shizuku.Shizuku
 import rikka.shizuku.Shizuku.OnBinderDeadListener
 import rikka.shizuku.Shizuku.OnBinderReceivedListener
 import top.coclyun.clipshare.clipboard_listener.ClipboardListener
-import top.coclyun.clipshare.clipboard_listener.ClipboardListenerPlugin
+import top.coclyun.clipshare.clipboard_listener.ClipshareClipboardListenerPlugin
 import top.coclyun.clipshare.clipboard_listener.ClipboardListeningWay
 import top.coclyun.clipshare.clipboard_listener.IClipboardListenerService
 import top.coclyun.clipshare.clipboard_listener.IOnClipboardChanged
@@ -54,7 +54,7 @@ class ForegroundService : Service() {
 
     //mHandler用于弱引用和主线程更新UI，避免内存泄漏。
     private var mHandler = MyHandler(this)
-    private var plugin: ClipboardListenerPlugin? = null
+    private var plugin: ClipshareClipboardListenerPlugin? = null
     private lateinit var windowManager: WindowManager
     private lateinit var mainParams: LayoutParams
     private var view: ViewGroup? = null
@@ -151,7 +151,7 @@ class ForegroundService : Service() {
         listenerService?.stopListening()
         listenerService = null
         useRoot = intent?.getBooleanExtra("useRoot", false) ?: false
-        plugin = ClipboardListenerPlugin.instance
+        plugin = ClipshareClipboardListenerPlugin.instance
         Shizuku.addBinderReceivedListenerSticky(onBinderReceivedListener)
         Shizuku.addBinderDeadListener(onBinderDeadListener)
         createNotify()
