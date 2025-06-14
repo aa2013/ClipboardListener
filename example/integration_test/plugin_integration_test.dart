@@ -10,7 +10,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
-import 'package:clipboard_listener/clipboard_manager.dart';
+import 'package:clipshare_clipboard_listener/clipboard_manager.dart';
 
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();

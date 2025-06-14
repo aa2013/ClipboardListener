@@ -1,4 +1,51 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-  package="top.coclyun.clipshare.clipboard_listener">
+    xmlns:tools="http://schemas.android.com/tools"
+    package="top.coclyun.clipshare.clipboard_listener">
 
+    <!--    添加前台服务权限声明-->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!--    悬浮窗权限-->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission
+        android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
+
+    <application>
+
+        <!--    声明前台服务-->
+        <service
+            android:name="top.coclyun.clipshare.clipboard_listener.service.ForegroundService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="specialUse"/>
+
+        <service
+            android:name="top.coclyun.clipshare.clipboard_listener.service.ActivityChangedService"
+            android:enabled="true"
+            android:exported="false"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+        </service>
+        <!--    声明文件处理provider-->
+        <provider
+            android:name="top.coclyun.clipshare.clipboard_listener.FileProvider"
+            android:authorities="${applicationId}.FileProvider"
+            android:exported="true"
+            android:multiprocess="true" />
+        <!--    声明shizuku provider-->
+        <provider
+            android:name="rikka.shizuku.ShizukuProvider"
+            android:authorities="${applicationId}.shizuku"
+            android:enabled="true"
+            android:exported="true"
+            android:multiprocess="false"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL" />
+    </application>
 </manifest>

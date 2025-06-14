@@ -1,9 +1,10 @@
 import 'dart:io';
 import 'dart:math';
 
-import 'package:clipboard_listener/clipboard_manager.dart';
-import 'package:clipboard_listener/enums.dart';
-import 'package:clipboard_listener/notification_content_config.dart';
+import 'package:clipshare_clipboard_listener/clipboard_manager.dart';
+import 'package:clipshare_clipboard_listener/enums.dart';
+import 'package:clipshare_clipboard_listener/models/clipboard_source.dart';
+import 'package:clipshare_clipboard_listener/models/notification_content_config.dart';
 import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -29,11 +30,13 @@ class MyApp extends StatefulWidget {
 class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObserver {
   String? type;
   String? content;
+  ClipboardSource? source;
   EnvironmentType env = EnvironmentType.none;
   bool isGranted = false;
   ClipboardListeningWay way = ClipboardListeningWay.logs;
   bool hasAlertWindowPermission = false;
   bool hasNotificationPermission = false;
+  bool hasAccessibilityPermission = false;
 
   @override
   void initState() {
@@ -56,6 +59,7 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
   Future<void> checkAndroidPermissions() async {
     hasAlertWindowPermission = await Permission.systemAlertWindow.isGranted;
     hasNotificationPermission = await Permission.notification.isGranted;
+    hasAccessibilityPermission = await clipboardManager.checkAccessibility();
     setState(() {});
   }
 
@@ -73,7 +77,7 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
         appBar: AppBar(
           title: const Text('Example'),
         ),
-        body: Builder(builder: (context,){
+        body: Builder(builder: (context) {
           return SingleChildScrollView(
             scrollDirection: Axis.vertical,
             child: Column(
@@ -116,7 +120,7 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
                       const Text('Permissions:'),
                       Padding(
                         padding: const EdgeInsets.only(left: 10, right: 10),
-                        child: Row(
+                        child: Wrap(
                           children: [
                             RawChip(
                               label: const Text("Alert Window"),
@@ -156,8 +160,23 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
                                 }
                               },
                             ),
+                            const SizedBox(width: 10),
+                            RawChip(
+                              label: const Text("Accessibility"),
+                              selected: hasAccessibilityPermission,
+                              onSelected: (_) async {
+                                if (hasAccessibilityPermission) {
+                                  return;
+                                }
+                                clipboardManager.requestAccessibility();
+                              },
+                            ),
                           ],
                         ),
+                      ),
+                      Container(
+                        margin: const EdgeInsets.symmetric(vertical: 5),
+                        child: Text("Options:"),
                       ),
                       Padding(
                         padding: const EdgeInsets.only(left: 10, right: 10),
@@ -168,12 +187,12 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
                               GestureDetector(
                                 onTap: env == EnvironmentType.shizuku
                                     ? () {
-                                  startListeningOnAndroid(
-                                    context,
-                                    env: EnvironmentType.shizuku,
-                                    way: way,
-                                  );
-                                }
+                                        startListeningOnAndroid(
+                                          context,
+                                          env: EnvironmentType.shizuku,
+                                          way: way,
+                                        );
+                                      }
                                     : null,
                                 child: Chip(
                                   label: Text(
@@ -185,12 +204,12 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
                               GestureDetector(
                                 onTap: env == EnvironmentType.root
                                     ? () {
-                                  startListeningOnAndroid(
-                                    context,
-                                    env: EnvironmentType.root,
-                                    way: way,
-                                  );
-                                }
+                                        startListeningOnAndroid(
+                                          context,
+                                          env: EnvironmentType.root,
+                                          way: way,
+                                        );
+                                      }
                                     : null,
                                 child: Chip(
                                   label: Text(
@@ -199,8 +218,15 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
                                   ),
                                 ),
                               ),
-                              const SizedBox(
-                                width: 10,
+                              GestureDetector(
+                                onTap: () {
+                                  clipboardManager.stopListening();
+                                  showSnackBarSuc(
+                                    context,
+                                    "Listening stopped",
+                                  );
+                                },
+                                child: const Chip(label: Text("Stop listening")),
                               ),
                             ],
                           ),
@@ -252,26 +278,6 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
                           ],
                         ),
                       ),
-                      Padding(
-                        padding: const EdgeInsets.only(left: 10, right: 10),
-                        child: Row(
-                          children: [
-                            GestureDetector(
-                              onTap: () {
-                                clipboardManager.stopListening();
-                                showSnackBarSuc(
-                                  context,
-                                  "Listening stopped",
-                                );
-                              },
-                              child: const Chip(label: Text("Stop listening")),
-                            ),
-                            const SizedBox(
-                              width: 10,
-                            ),
-                          ],
-                        ),
-                      ),
                     ],
                   ),
                 ),
@@ -279,7 +285,7 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
 
                 //region Linux
                 Visibility(
-                  visible: Platform.isLinux,
+                  visible: !Platform.isAndroid,
                   child: Column(
                     children: [
                       GestureDetector(
@@ -320,10 +326,15 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
                   ),
                 ),
                 //endregion
-                Text('type: $type\n\ncontent:\n$content\n\n'),
-                const SizedBox(
-                  height: 10,
-                ),
+                Text('type: $type\n\ncontent:\n$content\n\nsource:${source?.name}\n\n'),
+                const SizedBox(height: 10),
+                if (source?.iconBytes != null)
+                  Image.memory(
+                    source!.iconBytes!,
+                    height: 30,
+                    width: 30,
+                  ),
+                const SizedBox(height: 10),
                 const TextField(),
                 const SizedBox(
                   height: 10,
@@ -349,11 +360,32 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
   }
 
   @override
-  void onClipboardChanged(ClipboardContentType type, String content) {
+  void onClipboardChanged(ClipboardContentType type, String content, ClipboardSource? source) {
     print("type: ${type.name}, content: $content");
     setState(() {
       this.type = type.name;
       this.content = content;
+    });
+    setState(() {
+      this.source = source;
+    });
+    var start = DateTime.now();
+    clipboardManager.getLatestWriteClipboardSource().then((source) {
+      if (source == null) {
+        return;
+      }
+      final isTimeout = source.isTimeout(2000);
+      print("source time: ${source.time?.toString()}, timeout: $isTimeout");
+      var end = DateTime.now();
+      print("source: ${source.name}, offset: ${end.difference(start).inMilliseconds}");
+      if (isTimeout) {
+        return;
+      }
+      setState(() {
+        this.source = source;
+      });
+    }).catchError((err) {
+      print("error: $err");
     });
   }
 

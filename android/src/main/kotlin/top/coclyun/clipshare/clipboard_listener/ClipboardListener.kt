@@ -7,6 +7,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import androidx.core.content.ContextCompat
+import top.coclyun.clipshare.clipboard_listener.service.ActivityChangedService
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -14,20 +15,21 @@ import java.io.OutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.min
 
 
 open class ClipboardListener(
-    private var plugin: ClipboardListenerPlugin,
+    private var plugin: ClipshareClipboardListenerPlugin,
     private var context: Context
 ) {
     interface ClipboardObserver {
-        fun onClipboardChanged(type: ClipboardContentType, content: String)
+        fun onClipboardChanged(type: ClipboardContentType, content: String, packageName: String?)
     }
 
     companion object {
         @SuppressLint("StaticFieldLeak")
         private var _instance: ClipboardListener? = null
-        fun init(plugin: ClipboardListenerPlugin, context: Context): ClipboardListener {
+        fun init(plugin: ClipshareClipboardListenerPlugin, context: Context): ClipboardListener {
             _instance = ClipboardListener(plugin, context)
             return _instance!!
         }
@@ -53,23 +55,34 @@ open class ClipboardListener(
                 context,
                 ClipboardManager::class.java
             )
-            cm!!.addPrimaryClipChangedListener(this::onClipboardChanged)
+            cm!!.addPrimaryClipChangedListener {
+                if (onClipboardChanged(ActivityChangedService.topPkgName)) {
+                    ActivityChangedService.topPkgName = null
+                }
+            }
         }
     }
 
-    fun onClipboardChanged() {
+    fun onClipboardChanged(packageName: String?): Boolean {
         val env = plugin.currentEnv;
         if (!plugin.listening && (env == EnvironmentType.shizuku || env == EnvironmentType.root)) {
-            return
+            return false
         }
         try {
             val item = cm!!.primaryClip!!.getItemAt(0)
             val description = cm!!.primaryClipDescription!!
             val label = description.label;
             var type = ClipboardContentType.Text;
-            var content =
-                (if (item.text == null) item.coerceToText(context) else item.text).toString()
-            Log.d(TAG, "label:$label, uri:${item.uri}, content: $content")
+            var content = (item.text ?: item.coerceToText(context)).toString()
+            Log.d(
+                TAG,
+                "label:$label, uri:${item.uri}, content: ${
+                    content.substring(
+                        0,
+                        min(content.length, 20)
+                    )
+                }"
+            )
             if (item.uri != null) {
                 val contentResolver = context.contentResolver
                 val mimeType = contentResolver.getType(item.uri);
@@ -86,7 +99,7 @@ open class ClipboardListener(
                         val inputStream = contentResolver.openInputStream(item.uri)
                         if (inputStream == null) {
                             Log.e(TAG, "Failed to open input stream for URI: ${item.uri}")
-                            return;
+                            return false;
                         }
                         val destFile = File(cachePath)
                         val outputStream: OutputStream = FileOutputStream(destFile)
@@ -105,10 +118,13 @@ open class ClipboardListener(
                 }
             }
             for (observer in observers) {
-                observer.onClipboardChanged(type, content)
+                observer.onClipboardChanged(type, content, packageName)
             }
+            return true
         } catch (e: Exception) {
+            e.printStackTrace()
             Log.d(TAG, "onClipboardChanged error: ${e.message}")
+            return false
         }
     }
 
