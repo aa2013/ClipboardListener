@@ -7,6 +7,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import androidx.core.content.ContextCompat
+import top.coclyun.clipshare.clipboard_listener.service.ActivityChangedService
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -55,15 +56,17 @@ open class ClipboardListener(
                 ClipboardManager::class.java
             )
             cm!!.addPrimaryClipChangedListener {
-                onClipboardChanged(null)
+                if (onClipboardChanged(ActivityChangedService.topPkgName)) {
+                    ActivityChangedService.topPkgName = null
+                }
             }
         }
     }
 
-    fun onClipboardChanged(packageName: String?) {
+    fun onClipboardChanged(packageName: String?): Boolean {
         val env = plugin.currentEnv;
         if (!plugin.listening && (env == EnvironmentType.shizuku || env == EnvironmentType.root)) {
-            return
+            return false
         }
         try {
             val item = cm!!.primaryClip!!.getItemAt(0)
@@ -71,7 +74,15 @@ open class ClipboardListener(
             val label = description.label;
             var type = ClipboardContentType.Text;
             var content = (item.text ?: item.coerceToText(context)).toString()
-            Log.d(TAG, "label:$label, uri:${item.uri}, content: ${content.substring(0, min(content.length,20))}")
+            Log.d(
+                TAG,
+                "label:$label, uri:${item.uri}, content: ${
+                    content.substring(
+                        0,
+                        min(content.length, 20)
+                    )
+                }"
+            )
             if (item.uri != null) {
                 val contentResolver = context.contentResolver
                 val mimeType = contentResolver.getType(item.uri);
@@ -88,7 +99,7 @@ open class ClipboardListener(
                         val inputStream = contentResolver.openInputStream(item.uri)
                         if (inputStream == null) {
                             Log.e(TAG, "Failed to open input stream for URI: ${item.uri}")
-                            return;
+                            return false;
                         }
                         val destFile = File(cachePath)
                         val outputStream: OutputStream = FileOutputStream(destFile)
@@ -109,9 +120,11 @@ open class ClipboardListener(
             for (observer in observers) {
                 observer.onClipboardChanged(type, content, packageName)
             }
+            return true
         } catch (e: Exception) {
             e.printStackTrace()
             Log.d(TAG, "onClipboardChanged error: ${e.message}")
+            return false
         }
     }
 

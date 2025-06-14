@@ -123,8 +123,9 @@ class ForegroundService : Service() {
             TAG,
             "hasFocus: $hasFocus, topPkgName: ${ActivityChangedService.topPkgName}, this:${this}"
         )
-        ClipboardListener.instance.onClipboardChanged(topPkgName)
-        ActivityChangedService.topPkgName = null
+        if (ClipboardListener.instance.onClipboardChanged(topPkgName)) {
+            ActivityChangedService.topPkgName = null
+        }
         removeFloatFocusView()
     }
 

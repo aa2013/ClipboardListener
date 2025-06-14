@@ -15,7 +15,7 @@ class ActivityChangedService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         Log.d(TAG, "onAccessibilityEvent, event: ${event.eventType}")
-        if (event.eventType == AccessibilityEvent.WINDOWS_CHANGE_ACTIVE) {
+        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             topPkgName = event.packageName.toString()
             Log.d(TAG, "onAccessibilityEvent, pkgName: $topPkgName")
         }
@@ -29,4 +29,6 @@ class ActivityChangedService : AccessibilityService() {
         super.onServiceConnected()
         Log.w(TAG, "onServiceConnected")
     }
+
+
 }
