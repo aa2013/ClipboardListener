@@ -47,7 +47,7 @@ flutter:
       windows:
         pluginClass: ClipshareClipboardListenerPluginCApi
       linux:
-        pluginClass: ClipboardListenerPlugin
+        pluginClass: ClipshareClipboardListenerPlugin
 
   # To add assets to your plugin package, add an assets section, like this:
   # assets:

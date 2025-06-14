@@ -1,6 +1,6 @@
 #include <flutter_linux/flutter_linux.h>
 
-#include "include/clipboard_listener/clipboard_listener_plugin.h"
+#include "include/clipshare_clipboard_listener/clipshare_clipboard_listener_plugin.h"
 
 // This file exposes some plugin internals for unit testing. See
 // https://github.com/flutter/flutter/issues/88724 for current limitations
@@ -15,9 +15,9 @@ const char *kStopListening = "stopListening";
 const char *kCheckIsRunning = "checkIsRunning";
 const char *kCopy = "copy";
 
-static FlMethodResponse *startListening(ClipboardListenerPlugin *self, FlValue *args);
-static FlMethodResponse *stopListening(ClipboardListenerPlugin *self, FlValue *args);
-static FlMethodResponse *checkIsRunning(ClipboardListenerPlugin *self, FlValue *args);
-static FlMethodResponse *copyData(ClipboardListenerPlugin *self, const gchar *type, const gchar *content);
+static FlMethodResponse *startListening(ClipshareClipboardListenerPlugin *self, FlValue *args);
+static FlMethodResponse *stopListening(ClipshareClipboardListenerPlugin *self, FlValue *args);
+static FlMethodResponse *checkIsRunning(ClipshareClipboardListenerPlugin *self, FlValue *args);
+static FlMethodResponse *copyData(ClipshareClipboardListenerPlugin *self, const gchar *type, const gchar *content);
 static void onClipboardChanged(GtkClipboard *clipboard, GdkEvent *event, gpointer data);
 static gchar *getCurrentTimeWithMilliseconds();
