@@ -28,7 +28,7 @@ android {
         namespace = "top.coclyun.clipshare.clipboard_listener"
     }
 
-    compileSdk = 33
+    compileSdk = 34
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_1_8

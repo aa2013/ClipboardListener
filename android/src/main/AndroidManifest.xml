@@ -19,7 +19,7 @@
             android:name="top.coclyun.clipshare.clipboard_listener.service.ForegroundService"
             android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="dataSync"/>
+            android:foregroundServiceType="specialUse"/>
 
         <service
             android:name="top.coclyun.clipshare.clipboard_listener.service.ActivityChangedService"
