@@ -2,7 +2,7 @@ group = "top.coclyun.clipshare.clipboard_listener"
 version = "1.0-SNAPSHOT"
 
 buildscript {
-    ext.kotlin_version = "1.8.22"
+    ext.kotlin_version = "1.9.0"
     repositories {
         google()
         mavenCentral()
@@ -28,7 +28,7 @@ android {
         namespace = "top.coclyun.clipshare.clipboard_listener"
     }
 
-    compileSdk = 33
+    compileSdk = 34
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_1_8

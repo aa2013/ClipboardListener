@@ -46,6 +46,7 @@ class ForegroundService : Service() {
 
         @JvmStatic
         private var listenerService: IClipboardListenerService? = null
+
     }
 
     private val TAG = "ForegroundService"
@@ -117,8 +118,14 @@ class ForegroundService : Service() {
         if (view == null) return
         windowManager.addView(view, mainParams)
         val hasFocus = view!!.requestFocus()
-        Log.d(TAG, "hasFocus: $hasFocus")
-        ClipboardListener.instance.onClipboardChanged()
+        val topPkgName = ActivityChangedService.topPkgName;
+        Log.d(
+            TAG,
+            "hasFocus: $hasFocus, topPkgName: ${ActivityChangedService.topPkgName}, this:${this}"
+        )
+        if (ClipboardListener.instance.onClipboardChanged(topPkgName)) {
+            ActivityChangedService.topPkgName = null
+        }
         removeFloatFocusView()
     }
 
@@ -171,15 +178,15 @@ class ForegroundService : Service() {
             throw RuntimeException("Can not mapping listen way for $wayStr")
         }
         if (!useRoot) {
-            if (plugin!!.serviceConnection != null) {
+            if (plugin!!.listeningServiceConn != null) {
                 Shizuku.unbindUserService(
-                    plugin!!.userServiceArgs!!,
-                    plugin!!.serviceConnection,
+                    plugin!!.listeningServiceArgs!!,
+                    plugin!!.listeningServiceConn,
                     true
                 )
-                plugin!!.serviceConnection = null
+                plugin!!.listeningServiceConn = null
             }
-            plugin!!.serviceConnection = object : ServiceConnection {
+            plugin!!.listeningServiceConn = object : ServiceConnection {
 
                 private var service: IClipboardListenerService? = null
 
@@ -204,7 +211,7 @@ class ForegroundService : Service() {
                         e.printStackTrace()
                         plugin!!.listening = false
                         listenerService = null
-                        Log.w(TAG, "onServiceConnected ${e.message}")
+                        Log.w(TAG, "onServiceConnected Error: ${e.message}")
                     }
                 }
 
@@ -218,7 +225,10 @@ class ForegroundService : Service() {
                 }
             }
             Handler().postDelayed({
-                Shizuku.bindUserService(plugin!!.userServiceArgs!!, plugin!!.serviceConnection!!)
+                Shizuku.bindUserService(
+                    plugin!!.listeningServiceArgs!!,
+                    plugin!!.listeningServiceConn!!
+                )
             }, 500)
         } else {
             listenerService = ClipboardListenerService()

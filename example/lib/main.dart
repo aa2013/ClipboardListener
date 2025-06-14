@@ -1,8 +1,10 @@
 import 'dart:io';
 import 'dart:math';
 
-import 'package:clipboard_listener/clipboard_manager.dart';
-import 'package:clipboard_listener/enums.dart';
+import 'package:clipshare_clipboard_listener/clipboard_manager.dart';
+import 'package:clipshare_clipboard_listener/enums.dart';
+import 'package:clipshare_clipboard_listener/models/clipboard_source.dart';
+import 'package:clipshare_clipboard_listener/models/notification_content_config.dart';
 import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -25,33 +27,47 @@ class MyApp extends StatefulWidget {
   State<MyApp> createState() => _MyAppState();
 }
 
-class _MyAppState extends State<MyApp> with ClipboardListener {
+class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObserver {
   String? type;
   String? content;
-  String env = EnvironmentType.none.name;
+  ClipboardSource? source;
+  EnvironmentType env = EnvironmentType.none;
   bool isGranted = false;
+  ClipboardListeningWay way = ClipboardListeningWay.logs;
+  bool hasAlertWindowPermission = false;
+  bool hasNotificationPermission = false;
+  bool hasAccessibilityPermission = false;
 
   @override
   void initState() {
     super.initState();
     clipboardManager.addListener(this);
+    WidgetsBinding.instance.addObserver(this);
     initHotKey();
     initMultiWindowEvent();
     if (Platform.isAndroid) {
-      Permission.systemAlertWindow.request();
       clipboardManager.getCurrentEnvironment().then((env) {
         setState(() {
-          this.env = env.name;
+          this.env = env;
           this.isGranted = env != EnvironmentType.none;
         });
       });
+      checkAndroidPermissions();
     }
+  }
+
+  Future<void> checkAndroidPermissions() async {
+    hasAlertWindowPermission = await Permission.systemAlertWindow.isGranted;
+    hasNotificationPermission = await Permission.notification.isGranted;
+    hasAccessibilityPermission = await clipboardManager.checkAccessibility();
+    setState(() {});
   }
 
   @override
   void dispose() {
     super.dispose();
     clipboardManager.removeListener(this);
+    WidgetsBinding.instance.removeObserver(this);
   }
 
   @override
@@ -61,190 +77,282 @@ class _MyAppState extends State<MyApp> with ClipboardListener {
         appBar: AppBar(
           title: const Text('Example'),
         ),
-        body: Builder(builder: (BuildContext context) {
-          return Column(
-            children: [
-              const SizedBox(
-                height: 10,
-              ),
-              //region Android
-              Visibility(
-                visible: Platform.isAndroid,
-                child: Column(
-                  children: [
-                    Text('current environment: $env, status: $isGranted'),
-                    Padding(
-                      padding: const EdgeInsets.only(left: 10, right: 10),
-                      child: Row(
-                        children: [
-                          GestureDetector(
-                            onTap: () {
-                              clipboardManager.requestPermission(EnvironmentType.shizuku);
-                            },
-                            child: const Chip(label: Text("Request Shizuka")),
-                          ),
-                          const SizedBox(
-                            width: 10,
-                          ),
-                          GestureDetector(
-                            onTap: () {
-                              clipboardManager.requestPermission(EnvironmentType.root);
-                            },
-                            child: const Chip(label: Text("Request Root")),
-                          ),
-                          const SizedBox(
-                            width: 10,
-                          ),
-                        ],
+        body: Builder(builder: (context) {
+          return SingleChildScrollView(
+            scrollDirection: Axis.vertical,
+            child: Column(
+              children: [
+                const SizedBox(
+                  height: 10,
+                ),
+                //region Android
+                Visibility(
+                  visible: Platform.isAndroid,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Current environment: ${env.name}, Status: $isGranted'),
+                      Padding(
+                        padding: const EdgeInsets.only(left: 10, right: 10),
+                        child: Row(
+                          children: [
+                            GestureDetector(
+                              onTap: () {
+                                clipboardManager.requestPermission(EnvironmentType.shizuku);
+                              },
+                              child: const Chip(label: Text("Request Shizuka")),
+                            ),
+                            const SizedBox(
+                              width: 10,
+                            ),
+                            GestureDetector(
+                              onTap: () {
+                                clipboardManager.requestPermission(EnvironmentType.root);
+                              },
+                              child: const Chip(label: Text("Request Root")),
+                            ),
+                            const SizedBox(
+                              width: 10,
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.only(left: 10, right: 10),
-                      child: Row(
-                        children: [
-                          GestureDetector(
-                            onTap: () {
-                              clipboardManager
-                                  .startListening(
-                                startEnv: EnvironmentType.shizuku,
-                                way: ClipboardListeningWay.hiddenApi,
-                              )
-                                  .then((res) {
-                                if (res) {
+                      const Text('Permissions:'),
+                      Padding(
+                        padding: const EdgeInsets.only(left: 10, right: 10),
+                        child: Wrap(
+                          children: [
+                            RawChip(
+                              label: const Text("Alert Window"),
+                              selected: hasAlertWindowPermission,
+                              onSelected: (_) async {
+                                if (hasAlertWindowPermission) {
+                                  return;
+                                }
+                                final result = await Permission.systemAlertWindow.request();
+                                print("result isDenied = ${result.isDenied}");
+                                if (result.isGranted) {
+                                  setState(() {
+                                    hasAlertWindowPermission = result.isGranted;
+                                  });
+                                  showSnackBarSuc(context, "SystemAlertWindow granted");
+                                } else {
+                                  showSnackBarErr(context, "SystemAlertWindow denied");
+                                }
+                              },
+                            ),
+                            const SizedBox(width: 10),
+                            RawChip(
+                              label: const Text("Notification"),
+                              selected: hasNotificationPermission,
+                              onSelected: (_) async {
+                                if (hasNotificationPermission) {
+                                  return;
+                                }
+                                final result = await Permission.notification.request();
+                                if (result.isGranted) {
+                                  setState(() {
+                                    hasNotificationPermission = result.isGranted;
+                                  });
+                                  showSnackBarSuc(context, "Notification granted");
+                                } else {
+                                  showSnackBarErr(context, "Notification denied");
+                                }
+                              },
+                            ),
+                            const SizedBox(width: 10),
+                            RawChip(
+                              label: const Text("Accessibility"),
+                              selected: hasAccessibilityPermission,
+                              onSelected: (_) async {
+                                if (hasAccessibilityPermission) {
+                                  return;
+                                }
+                                clipboardManager.requestAccessibility();
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        margin: const EdgeInsets.symmetric(vertical: 5),
+                        child: Text("Options:"),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(left: 10, right: 10),
+                        child: IntrinsicHeight(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              GestureDetector(
+                                onTap: env == EnvironmentType.shizuku
+                                    ? () {
+                                        startListeningOnAndroid(
+                                          context,
+                                          env: EnvironmentType.shizuku,
+                                          way: way,
+                                        );
+                                      }
+                                    : null,
+                                child: Chip(
+                                  label: Text(
+                                    "Start listening by Shizuku",
+                                    style: env == EnvironmentType.shizuku ? null : const TextStyle(color: Colors.grey),
+                                  ),
+                                ),
+                              ),
+                              GestureDetector(
+                                onTap: env == EnvironmentType.root
+                                    ? () {
+                                        startListeningOnAndroid(
+                                          context,
+                                          env: EnvironmentType.root,
+                                          way: way,
+                                        );
+                                      }
+                                    : null,
+                                child: Chip(
+                                  label: Text(
+                                    "Start listening by Root",
+                                    style: env == EnvironmentType.root ? null : const TextStyle(color: Colors.grey),
+                                  ),
+                                ),
+                              ),
+                              GestureDetector(
+                                onTap: () {
+                                  clipboardManager.stopListening();
                                   showSnackBarSuc(
                                     context,
-                                    "Listening started successfully",
+                                    "Listening stopped",
                                   );
-                                } else {
-                                  showSnackBarErr(
-                                    context,
-                                    "Listening failed to start",
-                                  );
-                                }
-                              });
-                            },
-                            child: const Chip(label: Text("Start listening by Shizuku")),
+                                },
+                                child: const Chip(label: Text("Stop listening")),
+                              ),
+                            ],
                           ),
-                          const SizedBox(
-                            width: 10,
-                          ),
-                          GestureDetector(
-                            onTap: () {
-                              clipboardManager
-                                  .startListening(
-                                startEnv: EnvironmentType.root,
-                                way: ClipboardListeningWay.hiddenApi,
-                              )
-                                  .then((res) {
-                                if (res) {
-                                  showSnackBarSuc(
-                                    context,
-                                    "Listening started successfully",
-                                  );
-                                } else {
-                                  showSnackBarErr(
-                                    context,
-                                    "Listening failed to start",
-                                  );
-                                }
-                              });
-                            },
-                            child: const Chip(label: Text("Start listening by Root")),
-                          ),
-                          const SizedBox(
-                            width: 10,
-                          ),
-                        ],
+                        ),
                       ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.only(left: 10, right: 10),
-                      child: Row(
-                        children: [
-                          GestureDetector(
-                            onTap: () {
-                              clipboardManager.stopListening();
+                      Container(
+                        margin: const EdgeInsets.symmetric(vertical: 5),
+                        child: Text("listening way: ${way.name}"),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(left: 10, right: 10),
+                        child: Row(
+                          children: [
+                            RawChip(
+                              label: const Text("Hidden API"),
+                              selected: way == ClipboardListeningWay.hiddenApi,
+                              onSelected: (_) async {
+                                setState(() {
+                                  way = ClipboardListeningWay.hiddenApi;
+                                });
+                                await clipboardManager.stopListening();
+                                Future.delayed(const Duration(seconds: 1), () {
+                                  startListeningOnAndroid(
+                                    context,
+                                    env: env,
+                                    way: ClipboardListeningWay.hiddenApi,
+                                  );
+                                });
+                              },
+                            ),
+                            const SizedBox(width: 10),
+                            RawChip(
+                              label: const Text("System Logs"),
+                              selected: way == ClipboardListeningWay.logs,
+                              onSelected: (_) async {
+                                setState(() {
+                                  way = ClipboardListeningWay.logs;
+                                });
+                                await clipboardManager.stopListening();
+                                Future.delayed(const Duration(seconds: 1), () {
+                                  startListeningOnAndroid(
+                                    context,
+                                    env: env,
+                                    way: ClipboardListeningWay.logs,
+                                  );
+                                });
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                //endregion
+
+                //region Linux
+                Visibility(
+                  visible: !Platform.isAndroid,
+                  child: Column(
+                    children: [
+                      GestureDetector(
+                        onTap: () {
+                          clipboardManager.startListening().then((res) {
+                            if (res) {
                               showSnackBarSuc(
                                 context,
-                                "Listening stopped",
+                                "Listening started successfully",
                               );
-                            },
-                            child: const Chip(label: Text("Stop listening")),
-                          ),
-                          const SizedBox(
-                            width: 10,
-                          ),
-                        ],
+                            } else {
+                              showSnackBarErr(
+                                context,
+                                "Listening failed to start",
+                              );
+                            }
+                          });
+                        },
+                        child: const Chip(label: Text("Start listening")),
                       ),
-                    ),
-                  ],
-                ),
-              ),
-              //endregion
-              //region Linux
-              Visibility(
-                visible: Platform.isLinux,
-                child: Column(
-                  children: [
-                    GestureDetector(
-                      onTap: () {
-                        clipboardManager.startListening().then((res) {
-                          if (res) {
+                      GestureDetector(
+                        onTap: () {
+                          clipboardManager.stopListening().then((res) {
                             showSnackBarSuc(
                               context,
-                              "Listening started successfully",
+                              "Listening stopped successfully",
                             );
-                          } else {
+                          }).catchError((err) {
                             showSnackBarErr(
                               context,
-                              "Listening failed to start",
+                              "Listening failed to stop",
                             );
-                          }
-                        });
-                      },
-                      child: const Chip(label: Text("Start listening")),
-                    ),
-                    GestureDetector(
-                      onTap: () {
-                        clipboardManager.stopListening().then((res) {
-                          showSnackBarSuc(
-                            context,
-                            "Listening stopped successfully",
-                          );
-                        }).catchError((err) {
-                          showSnackBarErr(
-                            context,
-                            "Listening failed to stop",
-                          );
-                        });
-                      },
-                      child: const Chip(label: Text("Stop listening")),
-                    ),
-                  ],
+                          });
+                        },
+                        child: const Chip(label: Text("Stop listening")),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              //endregion
-              Text('type: $type\n\ncontent:\n$content\n\n'),
-              const SizedBox(
-                height: 10,
-              ),
-              const TextField(),
-              const SizedBox(
-                height: 10,
-              ),
-              GestureDetector(
-                onTap: () {
-                  clipboardManager.copy(ClipboardContentType.text, Random().nextInt(99999).toString());
-                },
-                child: const Chip(label: Text("Copy Random Data")),
-              ),
-              GestureDetector(
-                onTap: () {
-                  clipboardManager.copy(ClipboardContentType.image, "/tmp/2025-01-16_22-29-42-6.png");
-                },
-                child: const Chip(label: Text("Copy Test Image(mannal set on code)")),
-              ),
-            ],
+                //endregion
+                Text('type: $type\n\ncontent:\n$content\n\nsource:${source?.name}\n\n'),
+                const SizedBox(height: 10),
+                if (source?.iconBytes != null)
+                  Image.memory(
+                    source!.iconBytes!,
+                    height: 30,
+                    width: 30,
+                  ),
+                const SizedBox(height: 10),
+                const TextField(),
+                const SizedBox(
+                  height: 10,
+                ),
+                GestureDetector(
+                  onTap: () {
+                    clipboardManager.copy(ClipboardContentType.text, Random().nextInt(99999).toString());
+                  },
+                  child: const Chip(label: Text("Copy Random Data")),
+                ),
+                GestureDetector(
+                  onTap: () {
+                    clipboardManager.copy(ClipboardContentType.image, "/tmp/2025-01-16_22-29-42-6.png");
+                  },
+                  child: const Chip(label: Text("Copy Test Image(mannal set on code)")),
+                ),
+              ],
+            ),
           );
         }),
       ),
@@ -252,10 +360,32 @@ class _MyAppState extends State<MyApp> with ClipboardListener {
   }
 
   @override
-  void onClipboardChanged(ClipboardContentType type, String content) {
+  void onClipboardChanged(ClipboardContentType type, String content, ClipboardSource? source) {
+    print("type: ${type.name}, content: $content");
     setState(() {
       this.type = type.name;
       this.content = content;
+    });
+    setState(() {
+      this.source = source;
+    });
+    var start = DateTime.now();
+    clipboardManager.getLatestWriteClipboardSource().then((source) {
+      if (source == null) {
+        return;
+      }
+      final isTimeout = source.isTimeout(2000);
+      print("source time: ${source.time?.toString()}, timeout: $isTimeout");
+      var end = DateTime.now();
+      print("source: ${source.name}, offset: ${end.difference(start).inMilliseconds}");
+      if (isTimeout) {
+        return;
+      }
+      setState(() {
+        this.source = source;
+      });
+    }).catchError((err) {
+      print("error: $err");
     });
   }
 
@@ -263,8 +393,58 @@ class _MyAppState extends State<MyApp> with ClipboardListener {
   void onPermissionStatusChanged(EnvironmentType environment, bool isGranted) {
     debugPrint("env: ${environment.name}, granted: $isGranted");
     setState(() {
-      env = environment.name;
+      env = environment;
       this.isGranted = isGranted;
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.resumed:
+        if (Platform.isAndroid) {
+          checkAndroidPermissions();
+        }
+        break;
+      default:
+    }
+  }
+
+  Future startListeningOnAndroid(
+    BuildContext context, {
+    NotificationContentConfig? notificationContentConfig,
+    EnvironmentType? env,
+    ClipboardListeningWay? way,
+  }) {
+    if (!Platform.isAndroid) return Future.value();
+    //Android version>= 10
+    if (!hasAlertWindowPermission) {
+      showSnackBarErr(context, "No Alert Window permission");
+      return Future.value();
+    }
+    //Android version>= 10
+    if (!hasNotificationPermission) {
+      showSnackBarErr(context, "No Notification permission");
+      return Future.value();
+    }
+    return clipboardManager
+        .startListening(
+      env: env,
+      way: way,
+      notificationContentConfig: notificationContentConfig,
+    )
+        .then((res) {
+      if (res) {
+        showSnackBarSuc(
+          context,
+          "Listening started successfully",
+        );
+      } else {
+        showSnackBarErr(
+          context,
+          "Listening failed to start",
+        );
+      }
     });
   }
 

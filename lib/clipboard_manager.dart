@@ -1,7 +1,8 @@
 import 'dart:io';
 
-import 'package:clipboard_listener/enums.dart';
-import 'package:clipboard_listener/notification_content_config.dart';
+import 'package:clipshare_clipboard_listener/enums.dart';
+import 'package:clipshare_clipboard_listener/models/clipboard_source.dart';
+import 'package:clipshare_clipboard_listener/models/notification_content_config.dart';
 import 'package:flutter/services.dart';
 
 class SelectedFilesResult {
@@ -20,7 +21,9 @@ abstract mixin class ClipboardListener {
   /// If the clipboard contains both text and other types, it will return the text and ignore the other types.
   ///
   /// [content] The actual content in the clipboard, typically a string or path of an image.
-  void onClipboardChanged(ClipboardContentType type, String content);
+  ///
+  /// [source] Clipboard content source, usually the writer, but not guaranteed to be accurate. On Android, using shell to retrieve it may have high latency. Use the [getLatestWriteClipboardSource] method to asynchronously fetch it.
+  void onClipboardChanged(ClipboardContentType type, String content, ClipboardSource? source);
 
   /// Called when the permission status changes.（Only Android and IOS）
   ///
@@ -37,20 +40,30 @@ abstract mixin class ClipboardListener {
   void onPermissionStatusChanged(EnvironmentType environment, bool isGranted) {}
 }
 
+//common
 const kChannelName = 'top.coclyun.clipshare/clipboard_listener';
 const kOnClipboardChanged = "onClipboardChanged";
-const kOnPermissionStatusChanged = "onPermissionStatusChanged";
 const kStartListening = "startListening";
 const kCheckIsRunning = "checkIsRunning";
-const kCheckPermission = "checkPermission";
-const kRequestPermission = "requestPermission";
-const kGetSelectedFiles = "getSelectedFiles";
 const kStopListening = "stopListening";
-const kGetShizukuversion = "getShizukuVersion";
+const kCopy = "copy";
+
+//Windows
+const kGetSelectedFiles = "getSelectedFiles";
 const kStoreCurrentWindowHwnd = "storeCurrentWindowHwnd";
 const kPasteToPreviousWindow = "pasteToPreviousWindow";
+
+//Desktop
 const kSetTempFileDir = "setTempFileDir";
-const kCopy = "copy";
+
+//Android
+const kOnPermissionStatusChanged = "onPermissionStatusChanged";
+const kCheckPermission = "checkPermission";
+const kRequestPermission = "requestPermission";
+const kGetShizukuversion = "getShizukuVersion";
+const kGetLatestWriteClipboardSource = "getLatestWriteClipboardSource";
+const kCheckAccessibility = "checkAccessibility";
+const kRequestAccessibility = "requestAccessibility";
 
 class ClipboardManager {
   final _channel = const MethodChannel(kChannelName);
@@ -73,10 +86,10 @@ class ClipboardManager {
   ///start listening clipboard change event
   ///[title] notification title text
   ///[desc] notification description text
-  ///[startEnv] the listening mode you want to enable.The options are either a or b. If null, it will automatically select based on the current environment.
+  ///[env] the listening mode you want to enable.The options are either a or b. If null, it will automatically select based on the current environment.
   Future<bool> startListening({
     NotificationContentConfig? notificationContentConfig,
-    EnvironmentType? startEnv,
+    EnvironmentType? env,
     ClipboardListeningWay? way,
   }) {
     var args = <String, dynamic>{};
@@ -86,9 +99,9 @@ class ClipboardManager {
       }
       return true;
     }());
-    if (startEnv != null) {
-      args["env"] = startEnv.name;
-      if (startEnv == EnvironmentType.none) {
+    if (env != null) {
+      args["env"] = env.name;
+      if (env == EnvironmentType.none) {
         return Future(() => false);
       }
     }
@@ -189,14 +202,46 @@ class ClipboardManager {
     _channel.invokeMethod(kSetTempFileDir, {"tempFileDir": dirPath});
   }
 
+  /// Get the latest source written to the clipboard, but accuracy is not guaranteed
+  /// On Android, it is based on shell scripts and may be time-consuming
+  Future<ClipboardSource?> getLatestWriteClipboardSource() async {
+    if (!Platform.isAndroid) return null;
+    return _channel.invokeMethod<dynamic>(
+      kGetLatestWriteClipboardSource,
+      {},
+    ).then((data) {
+      if (data == null) return null;
+      return convert2Source(data);
+    });
+  }
+
+  /// Check for accessibility permission.
+  /// Accessibility permission is used to monitor changes in the top activity to determine which app the content was copied from.
+  Future<bool> checkAccessibility() async {
+    if (!Platform.isAndroid) return false;
+    return _channel.invokeMethod<bool?>(kCheckAccessibility, {}).then((res) => res ?? false);
+  }
+
+  /// Request accessibility permission.
+  /// Accessibility permission is used to monitor changes in the top activity to determine which app the content was copied from.
+  Future<void> requestAccessibility() async {
+    if (!Platform.isAndroid) return;
+    return _channel.invokeMethod<void>(kRequestAccessibility, {});
+  }
+
   Future<void> _methodCallHandler(MethodCall call) async {
-    var arguments = call.arguments;
+    var arguments = call.arguments as Map;
     for (var listener in _listeners) {
       switch (call.method) {
         case kOnClipboardChanged:
           String content = arguments['content'];
           var type = ClipboardContentType.parse(arguments['type']);
-          listener.onClipboardChanged(type, content);
+          ClipboardSource? source;
+          try {
+            dynamic data = arguments.containsKey("source") ? arguments["source"] : null;
+            source = convert2Source(data);
+          } catch (_) {}
+          listener.onClipboardChanged(type, content, source);
           break;
         case kOnPermissionStatusChanged:
           var env = EnvironmentType.parse(arguments['env']);
