@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:flutter/cupertino.dart';
+
 class AppInfo {
   final String id;
   final String name;
@@ -8,8 +10,12 @@ class AppInfo {
   Uint8List? _iconBytes;
 
   Uint8List? get iconBytes {
-    if (iconB64 == null) return null;
-    _iconBytes ??= base64.decode(iconB64!);
+    if (iconB64 == null || iconB64!.isEmpty) return null;
+    try {
+      _iconBytes ??= base64.decode(iconB64!);
+    } catch (err, stack) {
+      debugPrintStack(stackTrace: stack, label: err.toString());
+    }
     return _iconBytes;
   }
 

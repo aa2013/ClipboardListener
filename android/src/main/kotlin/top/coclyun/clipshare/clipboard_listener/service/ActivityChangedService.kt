@@ -30,5 +30,9 @@ class ActivityChangedService : AccessibilityService() {
         Log.w(TAG, "onServiceConnected")
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+        Log.w(TAG, "onDestroy!")
+    }
 
 }

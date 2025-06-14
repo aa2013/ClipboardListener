@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:clipboard_listener/models/app_info.dart';
+import 'package:path/path.dart' as path;
 
 class ClipboardSource extends AppInfo {
   final DateTime? time;
@@ -35,8 +37,13 @@ class ClipboardSource extends AppInfo {
 
 ClipboardSource? convert2Source(dynamic data) {
   try {
-    final id = data["id"];
-    final name = data["name"];
+    final id = data["id"] as String;
+    var name = data["name"] as String;
+    if(Platform.isWindows) {
+      if (name.isEmpty) {
+        name = path.basenameWithoutExtension(id);
+      }
+    }
     final timeStr = data["time"];
     print("timStr type ${timeStr.runtimeType}");
     final iconB64 = data["iconB64"];
