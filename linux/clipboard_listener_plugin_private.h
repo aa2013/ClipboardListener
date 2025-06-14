@@ -14,10 +14,6 @@ const char *kStartListening = "startListening";
 const char *kStopListening = "stopListening";
 const char *kCheckIsRunning = "checkIsRunning";
 const char *kCopy = "copy";
-//no impl
-const char *kGetSelectedFiles = "getSelectedFiles";
-const char *kStoreCurrentWindowHwnd = "storeCurrentWindowHwnd";
-const char *kPasteToPreviousWindow = "pasteToPreviousWindow";
 
 static FlMethodResponse *startListening(ClipboardListenerPlugin *self, FlValue *args);
 static FlMethodResponse *stopListening(ClipboardListenerPlugin *self, FlValue *args);

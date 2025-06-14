@@ -58,12 +58,6 @@ static void clipboard_listener_plugin_handle_method_call(
     const gchar *content = fl_value_get_string(content_value);
     response = copyData(self, type, content);
   }
-  else if (strcmp(method, kStoreCurrentWindowHwnd) == 0)
-  {
-  }
-  else if (strcmp(method, kPasteToPreviousWindow) == 0)
-  {
-  }
   else
   {
     response = FL_METHOD_RESPONSE(fl_method_not_implemented_response_new());
