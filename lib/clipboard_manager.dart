@@ -1,8 +1,8 @@
 import 'dart:io';
 
-import 'package:clipboard_listener/enums.dart';
-import 'package:clipboard_listener/models/clipboard_source.dart';
-import 'package:clipboard_listener/models/notification_content_config.dart';
+import 'package:clipshare_clipboard_listener/enums.dart';
+import 'package:clipshare_clipboard_listener/models/clipboard_source.dart';
+import 'package:clipshare_clipboard_listener/models/notification_content_config.dart';
 import 'package:flutter/services.dart';
 
 class SelectedFilesResult {

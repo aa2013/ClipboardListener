@@ -1,10 +1,10 @@
 import 'dart:io';
 import 'dart:math';
 
-import 'package:clipboard_listener/clipboard_manager.dart';
-import 'package:clipboard_listener/enums.dart';
-import 'package:clipboard_listener/models/clipboard_source.dart';
-import 'package:clipboard_listener/models/notification_content_config.dart';
+import 'package:clipshare_clipboard_listener/clipboard_manager.dart';
+import 'package:clipshare_clipboard_listener/enums.dart';
+import 'package:clipshare_clipboard_listener/models/clipboard_source.dart';
+import 'package:clipshare_clipboard_listener/models/notification_content_config.dart';
 import 'package:desktop_multi_window/desktop_multi_window.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';

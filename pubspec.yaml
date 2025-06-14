@@ -1,8 +1,10 @@
-name: clipboard_listener
+name: clipshare_clipboard_listener
+homepage: http://clipshare.coclyun.top/
+repository: https://github.com/aa2013/ClipboardListener
 description: >
-  Supports clipboard monitoring on Windows and Android platforms, with support for text and images. 
+  Supports clipboard monitoring on Windows、Android、Linux platforms, with support for text and images. 
   For Android 10+ devices, background clipboard monitoring is supported (requires Shizuku).
-version: 0.0.1
+version: 1.0.0
 #homepage:
 
 environment:
@@ -15,6 +17,7 @@ dependencies:
   plugin_platform_interface: ^2.0.2
   # 多窗口
   desktop_multi_window: ^0.2.0
+  path: ^1.9.1
 
 dev_dependencies:
   flutter_test:

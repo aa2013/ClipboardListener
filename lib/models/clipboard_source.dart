@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:clipboard_listener/models/app_info.dart';
+import 'package:clipshare_clipboard_listener/models/app_info.dart';
 import 'package:path/path.dart' as path;
 
 class ClipboardSource extends AppInfo {
@@ -45,19 +45,18 @@ ClipboardSource? convert2Source(dynamic data) {
       }
     }
     final timeStr = data["time"];
-    print("timStr type ${timeStr.runtimeType}");
     final iconB64 = data["iconB64"];
     DateTime? time;
     if (timeStr != null) {
       time = DateTime.parse(timeStr);
     }
     return ClipboardSource(
-      id: id!,
-      name: name!,
+      id: id,
+      name: name,
       time: time,
       iconB64: iconB64,
     );
-  } catch (err, stack) {
+  } catch (_) {
     return null;
   }
 }

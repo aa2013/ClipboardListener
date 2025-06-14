@@ -1,4 +1,4 @@
-import 'package:clipboard_listener/clipboard_manager.dart';
+import 'package:clipshare_clipboard_listener/clipboard_manager.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
