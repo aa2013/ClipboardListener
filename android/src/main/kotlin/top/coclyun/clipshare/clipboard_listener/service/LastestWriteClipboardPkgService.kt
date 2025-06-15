@@ -74,7 +74,7 @@ class LatestWriteClipboardPkgService : ILatestWriteClipboardPkgService.Stub() {
             os!!.flush()
             while (reader!!.readLine().also { line = it } != null) {
                 Log.d(TAG, line!!)
-                val data = line.split(",")
+                val data = line!!.split(",")
                 val pkgName = data[0].substring(pkgPrefix.length);
                 val totalMs = data[1].substring(totalPrefix.length);
                 return "$pkgName,$totalMs"

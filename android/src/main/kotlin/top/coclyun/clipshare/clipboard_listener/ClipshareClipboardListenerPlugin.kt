@@ -61,7 +61,7 @@ const val REQUEST_ACCESSIBILITY = "requestAccessibility"
 const val COPY = "copy"
 
 /** ClipboardListenerPlugin */
-class ClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
+class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
     Shizuku.OnRequestPermissionResultListener,
     ClipboardListener.ClipboardObserver, ActivityAware {
     private val TAG = "ClipboardListenerPlugin"
@@ -83,7 +83,7 @@ class ClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
     companion object {
         @JvmStatic
         @SuppressLint("StaticFieldLeak")
-        var instance: ClipboardListenerPlugin? = null
+        var instance: ClipshareClipboardListenerPlugin? = null
     }
 
     override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {

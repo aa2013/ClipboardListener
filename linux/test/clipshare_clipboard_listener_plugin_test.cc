@@ -2,8 +2,8 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include "include/clipboard_listener/clipboard_listener_plugin.h"
-#include "clipboard_listener_plugin_private.h"
+#include "include/clipshare_clipboard_listener/clipshare_clipboard_listener_plugin.h"
+#include "clipshare_clipboard_listener_plugin_private.h"
 
 // This demonstrates a simple unit test of the C portion of this plugin's
 // implementation.
@@ -13,10 +13,10 @@
 // built for x64 debug, run:
 // $ build/linux/x64/debug/plugins/my_plugin/my_plugin_test
 
-namespace clipboard_listener {
+namespace clipshare_clipboard_listener {
 namespace test {
 
-TEST(ClipboardListenerPlugin, GetPlatformVersion) {
+TEST(ClipshareClipboardListenerPlugin, GetPlatformVersion) {
   g_autoptr(FlMethodResponse) response = get_platform_version();
   ASSERT_NE(response, nullptr);
   ASSERT_TRUE(FL_IS_METHOD_SUCCESS_RESPONSE(response));
@@ -28,4 +28,4 @@ TEST(ClipboardListenerPlugin, GetPlatformVersion) {
 }
 
 }  // namespace test
-}  // namespace clipboard_listener
+}  // namespace clipshare_clipboard_listener
