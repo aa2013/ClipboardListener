@@ -1,3 +1,10 @@
+## 1.0.2
+* 修复 Android 某些情况下 无障碍服务中包名为null的问题
+
+---
+
+* Fix the issue where the package name is null in AccessibilityService under certain conditions on Android.
+
 ## 1.0.1
 * 修改包名
 
