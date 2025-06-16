@@ -4,7 +4,7 @@ repository: https://github.com/aa2013/ClipboardListener
 description: >
   Supports clipboard monitoring on Windows、Android、Linux platforms, with support for text and images. 
   For Android 10+ devices, background clipboard monitoring is supported (requires Shizuku).
-version: 1.0.2
+version: 1.0.3
 license: MIT
 #homepage:
 
@@ -16,8 +16,6 @@ dependencies:
   flutter:
     sdk: flutter
   plugin_platform_interface: ^2.0.2
-  # 多窗口
-  desktop_multi_window: ^0.2.0
   path: ^1.9.1
 
 dev_dependencies:

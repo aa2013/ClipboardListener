@@ -1,3 +1,10 @@
+## 1.0.3
+* 从包中移除 `desktop_multi_window` 插件（误引用）
+
+---
+
+* Remove the desktop_multi_window plugin from the package (incorrectly referenced)
+
 ## 1.0.2
 * 修复 Android 某些情况下 无障碍服务中包名为null的问题
 
