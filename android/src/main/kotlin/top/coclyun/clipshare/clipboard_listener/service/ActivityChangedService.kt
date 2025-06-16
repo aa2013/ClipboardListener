@@ -15,7 +15,7 @@ class ActivityChangedService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) {
         Log.d(TAG, "onAccessibilityEvent, event: ${event.eventType}")
-        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+        if (event.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED && event.packageName != null) {
             topPkgName = event.packageName.toString()
             Log.d(TAG, "onAccessibilityEvent, pkgName: $topPkgName")
         }
@@ -23,6 +23,7 @@ class ActivityChangedService : AccessibilityService() {
 
     override fun onInterrupt() {
         Log.w(TAG, "interrupted!")
+        topPkgName = null
     }
 
     override fun onServiceConnected() {
@@ -33,6 +34,7 @@ class ActivityChangedService : AccessibilityService() {
     override fun onDestroy() {
         super.onDestroy()
         Log.w(TAG, "onDestroy!")
+        topPkgName = null
     }
 
 }
