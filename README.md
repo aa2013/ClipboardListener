@@ -36,7 +36,7 @@
 
 ```yaml
 dependencies:
-  clipshare_clipboard_listener: ^1.0.3
+  clipshare_clipboard_listener: ^1.0.4
 ```
 
 ### 用法

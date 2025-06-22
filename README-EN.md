@@ -34,9 +34,9 @@ This project was extracted from [ClipShare](https://github.com/aa2013/ClipShare)
 
 Add this to your package's `pubspec.yaml` file:
 
-```
+```yaml
 dependencies:  
-  clipshare_clipboard_listener: ^1.0.3  
+  clipshare_clipboard_listener: ^1.0.4
 ```
 
 ### Usage
