@@ -318,7 +318,7 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
 
                 ClipboardContentType.Image -> {
                     val uri =
-                        Uri.parse("content://${context.packageName}.FileProvider/$content")
+                        Uri.parse("content://${context.packageName}.clipboard_listener.FileProvider/$content")
                     val clipData =
                         ClipData.newUri(
                             context.contentResolver,

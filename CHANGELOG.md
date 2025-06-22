@@ -1,3 +1,10 @@
+## 1.0.4
+* 修复 Android 通过插件复制图片失败的问题
+
+---
+
+* Fix the issue of failing to copy images via plugin on Android
+
 ## 1.0.3
 * 从包中移除 `desktop_multi_window` 插件（误引用）
 

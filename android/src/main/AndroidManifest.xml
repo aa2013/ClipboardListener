@@ -36,7 +36,7 @@
         <!--    声明文件处理provider-->
         <provider
             android:name="top.coclyun.clipshare.clipboard_listener.FileProvider"
-            android:authorities="${applicationId}.FileProvider"
+            android:authorities="${applicationId}.clipboard_listener.FileProvider"
             android:exported="true"
             android:multiprocess="true" />
         <!--    声明shizuku provider-->
