@@ -1,3 +1,10 @@
+## 1.0.5
+* 修复 因屏幕旋转重建Activity时可能导致的访问已死亡进程对象导致的异常闪退问题
+
+---
+
+* Fix the screen rotation to rebuild Activity, which may cause abnormal access to dead objects
+
 ## 1.0.4
 * 修复 Android 通过插件复制图片失败的问题
 

@@ -507,7 +507,11 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
             private var service: ILatestWriteClipboardPkgService? = null
             override fun onServiceConnected(name: ComponentName, binder: IBinder) {
                 if (service != null) {
-                    service?.destroy()
+                    try {
+                        service?.destroy()
+                    } catch (e: Exception) {
+                        //ignored
+                    }
                     return
                 }
                 Log.d(TAG, "onServiceConnected ${name.className}")
