@@ -37,6 +37,7 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
   bool hasAlertWindowPermission = false;
   bool hasNotificationPermission = false;
   bool hasAccessibilityPermission = false;
+  final controller = TextEditingController();
 
   @override
   void initState() {
@@ -335,9 +336,15 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
                     width: 30,
                   ),
                 const SizedBox(height: 10),
-                const TextField(),
+                TextField(controller: controller),
                 const SizedBox(
                   height: 10,
+                ),
+                GestureDetector(
+                  onTap: () {
+                    clipboardManager.copy(ClipboardContentType.text, controller.text);
+                  },
+                  child: const Chip(label: Text("Copy Input Data")),
                 ),
                 GestureDetector(
                   onTap: () {
@@ -347,7 +354,7 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
                 ),
                 GestureDetector(
                   onTap: () {
-                    clipboardManager.copy(ClipboardContentType.image, "/tmp/2025-01-16_22-29-42-6.png");
+                    clipboardManager.copy(ClipboardContentType.image, "/Users/admin/Library/Containers/top.coclyun.clipshare.clipshareClipboardListenerExample/Data/tmp/clipboard_20251109_184525_450.png");
                   },
                   child: const Chip(label: Text("Copy Test Image(mannal set on code)")),
                 ),
