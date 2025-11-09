@@ -17,7 +17,7 @@
 | Android | ✔️ 完全支持，Android 10+ 需要依赖 Shizuku / Root权限 |
 | Windows | ✔️ 完全支持                                          |
 | Linux   | ✔️ 完全支持                                          |
-| macOS   | ✖️ 暂不支持                                          |
+| macOS   | ✔️ 完全支持                                          |
 | IOS     | ✖️ 暂不支持                                          |
 
 ## 剪贴板内容类型
@@ -137,22 +137,22 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
 
 ## API
 
-| 方法                          | 描述                                                         | Android | Windows | Linux | macOS | IOS  |
-| ----------------------------- | ------------------------------------------------------------ | ------- | ------- | ----- | ----- | ---- |
-| onClipboardChanged            | 剪贴板内容更改事件，会携带内容类别、内容、来源信息，来源信息当前只支持 Windows 和 Android | ✔️       | ✔️       | ✔️     | ✖️     | ✖️    |
-| startListening                | 开始监听                                                     | ✔️       | ✔️       | ✔️     | ✖️     | ✖️    |
-| stopListening                 | 停止监听                                                     | ✔️       | ✔️       | ✔️     | ✖️     | ✖️    |
-| checkIsRunning                | 检查是否正在监听                                             | ✔️       | ✔️       | ✔️     | ✖️     | ✖️    |
-| copy                          | 复制内容（不会触发`onClipboardChanged`事件）                 | ✔️       | ✔️       | ✔️     | ✖️     | ✖️    |
-| getSelectedFiles              | 获取资源管理器中选择的文件                                   | ✖️       | ✔️       | ✖️     | ✖️     | ✖️    |
-| storeCurrentWindowHwnd        | 存储当前窗体的句柄                                           | ✖️       | ✔️       | ✖️     | ✖️     | ✖️    |
-| pasteToPreviousWindow         | 粘贴到前一个窗体中（需要在复制前先调用`storeCurrentWindowHwnd`） | ✖️       | ✔️       | ✖️     | ✖️     | ✖️    |
-| setTempFileDir                | 设置临时文件目录，复制图片后会将文件暂存到该路径下，默认为当前程序路径下 | ✖️       | ✔️       | ✔️     | ✖️     | ✖️    |
-| onPermissionStatusChanged     | 权限状态改变事件，当前只有Android有效                        | ✔️       | ✖️       | ✖️     | ✖️     | ✖️    |
-| checkPermission               | 检查相关权限，如Shizuku、Root等                              | ✔️       | ✖️       | ✖️     | ✖️     | ✖️    |
-| requestPermission             | 请求相关权限，如Shizuku、Root等                              | ✔️       | ✖️       | ✖️     | ✖️     | ✖️    |
-| getShizukuVersion             | 获取Shizuku版本                                              | ✔️       | ✖️       | ✖️     | ✖️     | ✖️    |
-| getLatestWriteClipboardSource | 获取最近一次写入剪贴板的应用信息（无需无障碍，通过dumpsys，需要Shizuku或Root权限） | ✔️       | ✖️       | ✖️     | ✖️     | ✖️    |
-| checkAccessibility            | 检查无障碍权限，如无该权限，Andorid系统下`onClipboardChanged`的来源信息为 `null` | ✔️       | ✖️       | ✖️     | ✖️     | ✖️    |
-| requestAccessibility          | 请求无障碍权限                                               | ✔️       | ✖️       | ✖️     | ✖️     | ✖️    |
+| 方法                          | 描述                                                            | Android | Windows | Linux | macOS | IOS  |
+| ----------------------------- |---------------------------------------------------------------| ------- | ------- | ----- | ---- | ---- |
+| onClipboardChanged            | 剪贴板内容更改事件，会携带内容类别、内容、来源信息，来源信息当前只支持 Windows 和 Android 和 MacOS | ✔️       | ✔️       | ✔️     | ✔️     | ✖️    |
+| startListening                | 开始监听                                                          | ✔️       | ✔️       | ✔️     | ✔️    | ✖️    |
+| stopListening                 | 停止监听                                                          | ✔️       | ✔️       | ✔️     | ✔️    | ✖️    |
+| checkIsRunning                | 检查是否正在监听                                                      | ✔️       | ✔️       | ✔️     | ✔️    | ✖️    |
+| copy                          | 复制内容（不会触发`onClipboardChanged`事件）                              | ✔️       | ✔️       | ✔️     | ✔️    | ✖️    |
+| getSelectedFiles              | 获取资源管理器中选择的文件                                                 | ✖️       | ✔️       | ✖️     | ✖️    | ✖️    |
+| storeCurrentWindowHwnd        | 存储当前窗体的句柄                                                     | ✖️       | ✔️       | ✖️     | ✔️    | ✖️    |
+| pasteToPreviousWindow         | 粘贴到前一个窗体中（需要在复制前先调用`storeCurrentWindowHwnd`）                  | ✖️       | ✔️       | ✖️     | ✔️    | ✖️    |
+| setTempFileDir                | 设置临时文件目录，复制图片后会将文件暂存到该路径下，默认为当前程序路径下                          | ✖️       | ✔️       | ✔️     | ✖️    | ✖️    |
+| onPermissionStatusChanged     | 权限状态改变事件，当前只有Android有效                                        | ✔️       | ✖️       | ✖️     | ✖️    | ✖️    |
+| checkPermission               | 检查相关权限，如Shizuku、Root等                                         | ✔️       | ✖️       | ✖️     | ✖️    | ✖️    |
+| requestPermission             | 请求相关权限，如Shizuku、Root等                                         | ✔️       | ✖️       | ✖️     | ✖️    | ✖️    |
+| getShizukuVersion             | 获取Shizuku版本                                                   | ✔️       | ✖️       | ✖️     | ✖️    | ✖️    |
+| getLatestWriteClipboardSource | 获取最近一次写入剪贴板的应用信息（无需无障碍，通过dumpsys，需要Shizuku或Root权限）            | ✔️       | ✖️       | ✖️     | ✖️    | ✖️    |
+| checkAccessibility            | 检查无障碍权限，如无该权限，Andorid系统下`onClipboardChanged`的来源信息为 `null`     | ✔️       | ✖️       | ✖️     | ✖️    | ✖️    |
+| requestAccessibility          | 请求无障碍权限                                                       | ✔️       | ✖️       | ✖️     | ✖️    | ✖️    |
 

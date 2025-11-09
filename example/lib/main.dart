@@ -476,15 +476,13 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
     await hotKeyManager.unregisterAll();
     final key = HotKey(
       key: PhysicalKeyboardKey.keyG,
-      modifiers: [HotKeyModifier.control, HotKeyModifier.alt],
+      modifiers: [HotKeyModifier.alt],
       scope: HotKeyScope.system,
     );
     await hotKeyManager.register(
       key,
       keyDownHandler: (hotKey) async {
-        if (Platform.isWindows) {
-          await clipboardManager.storeCurrentWindowHwnd();
-        }
+        await clipboardManager.storeCurrentWindowHwnd();
         //createWindow里面的参数必须传
         final window = await DesktopMultiWindow.createWindow('{}');
         window

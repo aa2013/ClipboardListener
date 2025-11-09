@@ -8,6 +8,8 @@ public class ClipshareClipboardListenerPlugin: NSObject, FlutterPlugin {
     private static let kStartListening = "startListening"
     private static let kStopListening = "stopListening"
     private static let kCheckIsRunning = "checkIsRunning"
+    private static let kStoreCurrentWindowHwnd = "storeCurrentWindowHwnd"
+    private static let kPasteToPreviousWindow = "pasteToPreviousWindow"
     private static let kCopy = "copy"
 
 
@@ -16,6 +18,7 @@ public class ClipshareClipboardListenerPlugin: NSObject, FlutterPlugin {
     private var changeCount: Int = -1
     private var timer: Timer?
     private var ignoreNextCopy = false
+    private var currentApp: NSRunningApplication?
 
     // 图片保存目录
     private let imageSavePath: String = {
@@ -39,6 +42,10 @@ public class ClipshareClipboardListenerPlugin: NSObject, FlutterPlugin {
             stopListening(result: result)
         case ClipshareClipboardListenerPlugin.kCheckIsRunning:
             checkIsRunning(result: result)
+        case ClipshareClipboardListenerPlugin.kStoreCurrentWindowHwnd:
+            storeCurrentWindowHwnd(result: result)
+        case ClipshareClipboardListenerPlugin.kPasteToPreviousWindow:
+            pasteToPreviousWindow(result: result)
         case ClipshareClipboardListenerPlugin.kCopy:
             let type = args["type"] as? String
             let content = args["content"] as? String
@@ -92,6 +99,54 @@ public class ClipshareClipboardListenerPlugin: NSObject, FlutterPlugin {
         }
         result(success)
     }
+
+    private func storeCurrentWindowHwnd(result: @escaping FlutterResult){
+        let workspace = NSWorkspace.shared
+        guard let frontApp = workspace.frontmostApplication else {
+            result(false)
+            return
+        }
+        currentApp = frontApp
+        result(true)
+    }
+
+    private func pasteToPreviousWindow(result: @escaping FlutterResult){
+        if currentApp == nil{
+            result(false)
+            return
+        }
+        // 激活前台应用
+        currentApp!.activate(options: [.activateAllWindows])
+        sendPasteShortcut()
+        result(true)
+    }
+
+    //模拟 粘贴事件
+    func sendPasteShortcut() {
+        // Command + V
+        let src = CGEventSource(stateID: .hidSystemState)
+
+        // ⌘ 键按下
+        let cmdDown = CGEvent(keyboardEventSource: src, virtualKey: 0x37, keyDown: true)
+        cmdDown?.flags = .maskCommand
+        cmdDown?.post(tap: .cgSessionEventTap)
+
+        // V 键按下
+        let vDown = CGEvent(keyboardEventSource: src, virtualKey: 0x09, keyDown: true)
+        vDown?.flags = .maskCommand
+        vDown?.post(tap: .cgSessionEventTap)
+
+        // V 键松开
+        let vUp = CGEvent(keyboardEventSource: src, virtualKey: 0x09, keyDown: false)
+        vUp?.flags = .maskCommand
+        vUp?.post(tap: .cgSessionEventTap)
+
+        // ⌘ 键松开
+        let cmdUp = CGEvent(keyboardEventSource: src, virtualKey: 0x37, keyDown: false)
+        cmdUp?.post(tap: .cgSessionEventTap)
+    }
+
+    //region OnClipboardChanged
 
     @objc private func onClipboardChanged() {
         if (pasteboard.changeCount == changeCount){
@@ -169,7 +224,6 @@ public class ClipshareClipboardListenerPlugin: NSObject, FlutterPlugin {
         return formatter.string(from: Date())
     }
 
-
     private func getFrontmostApplication() -> NSRunningApplication?? {
         let workspace = NSWorkspace.shared
         guard let frontApp = workspace.frontmostApplication else {
@@ -210,4 +264,6 @@ public class ClipshareClipboardListenerPlugin: NSObject, FlutterPlugin {
 
         return resizedImage
     }
+
+    //endregion
 }
