@@ -122,8 +122,9 @@ public class ClipshareClipboardListenerPlugin: NSObject, FlutterPlugin {
         }else{
             return
         }
-        var source:[String: Any]=[:]
         if let app = getFrontmostApplication() {
+            var source:[String: Any] = [:]
+
             // 应用ID (bundle identifier)
             if let bundleIdentifier = app!.bundleIdentifier {
                 source["id"] = bundleIdentifier
@@ -132,8 +133,6 @@ public class ClipshareClipboardListenerPlugin: NSObject, FlutterPlugin {
             // 应用名称
             if let localizedName = app!.localizedName {
                 source["name"] = localizedName
-            } else if let bundleIdentifier = app!.bundleIdentifier {
-                source["name"] = bundleIdentifier
             }
 
             // 应用图标 Base64
