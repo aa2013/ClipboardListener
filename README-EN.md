@@ -36,7 +36,7 @@ Add this to your package's `pubspec.yaml` file:
 
 ```yaml
 dependencies:  
-  clipshare_clipboard_listener: ^1.2.0
+  clipshare_clipboard_listener: ^1.2.1
 ```
 
 ### Usage
@@ -135,21 +135,21 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
 
 ## API
 
-| Method                        | Description                                                                                                                                                 | Android | Windows | Linux | macOS | iOS  |
-| ----------------------------- |-------------------------------------------------------------------------------------------------------------------------------------------------------------| ------- | ------- | ----- | ---- | ---- |
-| onClipboardChanged            | Clipboard content change event (includes content type, content, and source). Currently, source information is only supported on Windows, MacOS and Android. | ✔️       | ✔️       | ✔️     | ✔️ | ✖️    |
-| startListening                | Start listening                                                                                                                                             | ✔️       | ✔️       | ✔️     | ✔️ | ✖️    |
-| stopListening                 | Stop listening                                                                                                                                              | ✔️       | ✔️       | ✔️     | ✔️ | ✖️    |
-| checkIsRunning                | Check if listening is active                                                                                                                                | ✔️       | ✔️       | ✔️     | ✔️ | ✖️    |
-| copy                          | Copy content (does not trigger `onClipboardChanged`)                                                                                                        | ✔️       | ✔️       | ✔️     | ✔️ | ✖️    |
-| getSelectedFiles              | Get selected files in the file explorer                                                                                                                     | ✖️       | ✔️       | ✖️     | ✖️ | ✖️    |
-| storeCurrentWindowHwnd        | Store the handle of the current window                                                                                                                      | ✖️       | ✔️       | ✖️     | ✔️ | ✖️    |
-| pasteToPreviousWindow         | Paste into the previous window (requires calling `storeCurrentWindowHwnd` first)                                                                            | ✖️       | ✔️       | ✖️     | ✔️ | ✖️    |
-| setTempFileDir                | Set the temporary file directory (default is the current program path)                                                                                      | ✖️       | ✔️       | ✔️     | ✖️ | ✖️    |
-| onPermissionStatusChanged     | Permission status change event (Android only)                                                                                                               | ✔️       | ✖️       | ✖️     | ✖️ | ✖️    |
-| checkPermission               | Check permissions (e.g., Shizuku, Root)                                                                                                                     | ✔️       | ✖️       | ✖️     | ✖️ | ✖️    |
-| requestPermission             | Request permissions (e.g., Shizuku, Root)                                                                                                                   | ✔️       | ✖️       | ✖️     | ✖️ | ✖️    |
-| getShizukuVersion             | Get the Shizuku version                                                                                                                                     | ✔️       | ✖️       | ✖️     | ✖️ | ✖️    |
-| getLatestWriteClipboardSource | Get the latest app that wrote to the clipboard (requires Shizuku or Root)                                                                                   | ✔️       | ✖️       | ✖️     | ✖️ | ✖️    |
-| checkAccessibility            | Check accessibility permissions (required for clipboard source info on Android)                                                                             | ✔️       | ✖️       | ✖️     | ✖️ | ✖️    |
-| requestAccessibility          | Request accessibility permissions                                                                                                                           | ✔️       | ✖️       | ✖️     | ✖️ | ✖️    |
+| Method                        | Description                                                                                                                      | Android | Windows | Linux | macOS | iOS  |
+| ----------------------------- |----------------------------------------------------------------------------------------------------------------------------------| ------- | ------- | ----- | ---- | ---- |
+| onClipboardChanged            | Clipboard content change event (includes content type, content, and source). Currently, source information is based X11 on Linux | ✔️       | ✔️       | ✔️     | ✔️ | ✖️    |
+| startListening                | Start listening                                                                                                                  | ✔️       | ✔️       | ✔️     | ✔️ | ✖️    |
+| stopListening                 | Stop listening                                                                                                                   | ✔️       | ✔️       | ✔️     | ✔️ | ✖️    |
+| checkIsRunning                | Check if listening is active                                                                                                     | ✔️       | ✔️       | ✔️     | ✔️ | ✖️    |
+| copy                          | Copy content (does not trigger `onClipboardChanged`)                                                                             | ✔️       | ✔️       | ✔️     | ✔️ | ✖️    |
+| getSelectedFiles              | Get selected files in the file explorer                                                                                          | ✖️       | ✔️       | ✖️     | ✖️ | ✖️    |
+| storeCurrentWindowHwnd        | Store the handle of the current window                                                                                           | ✖️       | ✔️       | ✔️     | ✔️ | ✖️    |
+| pasteToPreviousWindow         | Paste into the previous window (requires calling `storeCurrentWindowHwnd` first)                                                 | ✖️       | ✔️       | ✔️     | ✔️ | ✖️    |
+| setTempFileDir                | Set the temporary file directory (default is the current program path)                                                           | ✖️       | ✔️       | ✔️     | ✖️ | ✖️    |
+| onPermissionStatusChanged     | Permission status change event (Android only)                                                                                    | ✔️       | ✖️       | ✖️     | ✖️ | ✖️    |
+| checkPermission               | Check permissions (e.g., Shizuku, Root)                                                                                          | ✔️       | ✖️       | ✖️     | ✖️ | ✖️    |
+| requestPermission             | Request permissions (e.g., Shizuku, Root)                                                                                        | ✔️       | ✖️       | ✖️     | ✖️ | ✖️    |
+| getShizukuVersion             | Get the Shizuku version                                                                                                          | ✔️       | ✖️       | ✖️     | ✖️ | ✖️    |
+| getLatestWriteClipboardSource | Get the latest app that wrote to the clipboard (requires Shizuku or Root)                                                        | ✔️       | ✖️       | ✖️     | ✖️ | ✖️    |
+| checkAccessibility            | Check accessibility permissions (required for clipboard source info on Android)                                                  | ✔️       | ✖️       | ✖️     | ✖️ | ✖️    |
+| requestAccessibility          | Request accessibility permissions                                                                                                | ✔️       | ✖️       | ✖️     | ✖️ | ✖️    |
