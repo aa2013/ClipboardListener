@@ -168,7 +168,7 @@ class ClipboardManager {
 
   ///Save the hwnd of the current window and use it in conjunction with [pasteToPreviousWindow] method
   Future<void> storeCurrentWindowHwnd() {
-    if (!Platform.isWindows && !Platform.isMacOS) return Future.value();
+    if (!Platform.isWindows && !Platform.isMacOS && !Platform.isLinux) return Future.value();
     return _channel.invokeMethod(kStoreCurrentWindowHwnd);
   }
 
@@ -176,7 +176,7 @@ class ClipboardManager {
   ///Ensure [storeCurrentWindowHwnd] is called before pasting clipboard data into the previous window.
   ///[keyDelayMs] The interval duration of each key, if the duration is too short, the combination key may not work properly
   Future<void> pasteToPreviousWindow([int keyDelayMs = 100]) {
-    if (!Platform.isWindows && !Platform.isMacOS) return Future.value();
+    if (!Platform.isWindows && !Platform.isMacOS && !Platform.isLinux) return Future.value();
     if (keyDelayMs < 0) {
       throw Exception("KeyDelayMs cannot be less than 0");
     }

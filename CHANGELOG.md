@@ -1,3 +1,10 @@
+## 1.2.0
+* Linux 端支持获取剪贴板来源和粘贴到前一窗口功能（基于X11）
+
+---
+
+* Linux supports obtaining clipboard source and pasting to previous window (based on X11).
+
 ## 1.1.0
 * 新增 MacOS 支持
 

@@ -14,6 +14,8 @@ set(PLUGIN_NAME "clipshare_clipboard_listener_plugin")
 # Any new source files that you add to the plugin should be added here.
 list(APPEND PLUGIN_SOURCES
   "clipshare_clipboard_listener_plugin.cc"
+  "utils.cc"
+  "foreground_app_info.cc"
 )
 
 # Define the plugin library target. Its name must not be changed (see comment
@@ -40,7 +42,12 @@ target_include_directories(${PLUGIN_NAME} INTERFACE
   "${CMAKE_CURRENT_SOURCE_DIR}/include")
 target_link_libraries(${PLUGIN_NAME} PRIVATE flutter)
 target_link_libraries(${PLUGIN_NAME} PRIVATE PkgConfig::GTK)
+# 查找 X11 和 Xtst
+find_package(X11 REQUIRED)
+find_library(XTEST_LIB Xtst REQUIRED)
 
+# 链接库
+target_link_libraries(${PLUGIN_NAME} PRIVATE flutter PkgConfig::GTK ${X11_LIBRARIES} ${XTEST_LIB})
 # List of absolute paths to libraries that should be bundled with the plugin.
 # This list could contain prebuilt libraries, or libraries created by an
 # external build triggered from this build file.

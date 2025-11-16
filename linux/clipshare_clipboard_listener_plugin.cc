@@ -1,18 +1,15 @@
 #include "include/clipshare_clipboard_listener/clipshare_clipboard_listener_plugin.h"
+#include "clipshare_clipboard_listener_plugin_private.h"
+#include "include/clipshare_clipboard_listener/utils.h"
+#include "include/clipshare_clipboard_listener/foreground_app_info.h"
 
 #include <flutter_linux/flutter_linux.h>
 #include <gtk/gtk.h>
 #include <gdk-pixbuf/gdk-pixbuf.h>
 #include <sys/utsname.h>
-
 #include <cstring>
 #include <string>
-#include <regex>
-#include <chrono>
-#include <ctime>
 #include <glib.h>
-
-#include "clipshare_clipboard_listener_plugin_private.h"
 
 #define CLIPSHARE_CLIPBOARD_LISTENER_PLUGIN(obj)                                     \
   (G_TYPE_CHECK_INSTANCE_CAST((obj), clipshare_clipboard_listener_plugin_get_type(), \
@@ -57,6 +54,16 @@ static void clipshare_clipboard_listener_plugin_handle_method_call(
     const gchar *type = fl_value_get_string(type_value);
     const gchar *content = fl_value_get_string(content_value);
     response = copyData(self, type, content);
+  }
+  else if(strcmp(method, kStoreCurrentWindowHwnd) == 0)
+  {
+      response = storeCurrentWindowHwnd(self);
+  }
+  else if(strcmp(method, kPasteToPreviousWindow) == 0)
+  {
+      FlValue *key_delay_ms_value = fl_value_lookup_string(args, "keyDelayMs");
+      int64_t delay_ms = fl_value_get_int(key_delay_ms_value);
+      response = pasteToPreviousWindow(self, delay_ms);
   }
   else
   {
@@ -105,37 +112,6 @@ void clipshare_clipboard_listener_plugin_register_with_registrar(FlPluginRegistr
                    plugin);
   g_object_unref(plugin);
 }
-static gchar *getCurrentTimeWithMilliseconds()
-{
-  // 获取当前系统时间（精确到毫秒）
-  auto now = std::chrono::system_clock::now();
-  auto now_ms = std::chrono::time_point_cast<std::chrono::milliseconds>(now);
-  auto epoch = now_ms.time_since_epoch();
-  auto value = std::chrono::duration_cast<std::chrono::milliseconds>(epoch);
-
-  // 转换成当前时间的字符串表示形式
-  auto time = std::chrono::system_clock::to_time_t(now);
-  struct tm tm;
-  localtime_r(&time, &tm);
-
-  // 生成当前时间字符串
-  char buffer[30];
-  strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", &tm);
-
-  // 获取当前毫秒部分
-  int milliseconds = value.count() % 1000;
-  std::string currentTime(buffer);
-  currentTime += "." + std::to_string(milliseconds);
-
-  // 使用正则表达式替换字符
-  std::regex reg("[:.]");
-  currentTime = std::regex_replace(currentTime, reg, "-");
-  reg = std::regex(" +");
-  currentTime = std::regex_replace(currentTime, reg, "_");
-
-  // 将 std::string 转换为 gchar* 并返回
-  return g_strdup(currentTime.c_str());
-}
 
 static void onClipboardChanged(GtkClipboard *clipboard, GdkEvent *event, gpointer data)
 {
@@ -167,7 +143,7 @@ static void onClipboardChanged(GtkClipboard *clipboard, GdkEvent *event, gpointe
     GdkPixbuf *pixbuf = gtk_clipboard_wait_for_image(clipboard);
     if (pixbuf != NULL)
     {
-      g_print("Image found on clipboard\n");
+      debug_printf("Image found on clipboard\n");
       GError *error = NULL;
 
       gchar *currentTime = getCurrentTimeWithMilliseconds();
@@ -192,6 +168,41 @@ static void onClipboardChanged(GtkClipboard *clipboard, GdkEvent *event, gpointe
   }
   fl_value_set(result_data, content_key, content_value);
   fl_value_set(result_data, type_key, type_value);
+
+  // 声明变量来接收结果
+  gchar *app_name = NULL;
+  gchar *package_name = NULL;
+  gchar *iconB64 = NULL;
+  // 调用函数
+  gboolean success = get_foreground_app(&app_name, &package_name, &iconB64);
+  if (success) {
+      g_autoptr(FlValue) source_key = fl_value_new_string("source");
+      g_autoptr(FlValue) id_key = fl_value_new_string("id");
+      g_autoptr(FlValue) name_key = fl_value_new_string("name");
+      g_autoptr(FlValue) iconB64_key = fl_value_new_string("iconB64");
+
+      g_autoptr(FlValue) source = fl_value_new_map();
+
+      if (app_name){
+          g_autoptr(FlValue) source_app_name = fl_value_new_string(app_name);
+          fl_value_set(source, name_key, source_app_name);
+      }
+      if (package_name){
+          g_autoptr(FlValue) source_package_name = fl_value_new_string(package_name);
+          fl_value_set(source, id_key, source_package_name);
+      }
+      if(iconB64){
+          g_autoptr(FlValue) source_icon_b64 = fl_value_new_string(iconB64);
+          fl_value_set(source, iconB64_key, source_icon_b64);
+      }
+      fl_value_set(result_data, source_key, source);
+
+      g_free(app_name);
+      g_free(package_name);
+      g_free(iconB64);
+  } else {
+      debug_printf("获取前台应用失败\n");
+  }
   fl_method_channel_invoke_method(plugin->channel, kOnClipboardChanged, result_data, nullptr, nullptr, nullptr);
 }
 
@@ -238,7 +249,7 @@ static FlMethodResponse *copyData(ClipshareClipboardListenerPlugin *self, const 
 
     if (pixbuf == NULL)
     {
-      g_print("Failed to load image: %s\n", error->message);
+      debug_printf("Failed to load image: %s\n", error->message);
       g_error_free(error);
     }
     else
@@ -254,4 +265,29 @@ static FlMethodResponse *copyData(ClipshareClipboardListenerPlugin *self, const 
   }
   g_autoptr(FlValue) result = fl_value_new_bool(success);
   return FL_METHOD_RESPONSE(fl_method_success_response_new(result));
+}
+static Window previousWindow = 0;
+
+static FlMethodResponse *storeCurrentWindowHwnd(ClipshareClipboardListenerPlugin *self)
+{
+    previousWindow = getWindowId();
+    g_autoptr(FlValue) result = fl_value_new_bool(previousWindow != 0);
+    return FL_METHOD_RESPONSE(fl_method_success_response_new(result));
+}
+
+static gboolean activateAndPaste(int64_t dealyMs) {
+    Display* display;
+    if(!activeWindow(previousWindow, &display)){
+        return false;
+    }
+    // 延迟等待窗口真正获得焦点
+    usleep(dealyMs * 1000);
+    send_ctrl_v(display);
+    XCloseDisplay(display);
+    return true;
+}
+static FlMethodResponse *pasteToPreviousWindow(ClipshareClipboardListenerPlugin *self, int64_t delayMs)
+{
+    g_autoptr(FlValue) result = fl_value_new_bool(activateAndPaste(delayMs));
+    return FL_METHOD_RESPONSE(fl_method_success_response_new(result));
 }
