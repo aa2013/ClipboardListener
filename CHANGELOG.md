@@ -1,3 +1,8 @@
+## 1.2.2
+* Windows exclude 排除'ExcludeClipboardContentFromMonitorProcessing' 格式
+---
+* Windows exclude 'ExcludeClipboardContentFromMonitorProcessing' format
+
 ## 1.2.1
 update README.md
 
