@@ -1,5 +1,10 @@
+## 1.2.3
+* Android 修复 当写入的图片 MIMEType 非 'image' 时通过文件头判断
+---
+* Android Fix: Determine file type via file header when the written image's MIMEType is not 'image'.
+
 ## 1.2.2
-* Windows exclude 排除'ExcludeClipboardContentFromMonitorProcessing' 格式
+* Windows 排除 'ExcludeClipboardContentFromMonitorProcessing' 格式
 ---
 * Windows exclude 'ExcludeClipboardContentFromMonitorProcessing' format
 

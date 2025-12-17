@@ -3,11 +3,13 @@ package top.coclyun.clipshare.clipboard_listener
 import android.annotation.SuppressLint
 import android.content.ClipboardManager
 import android.content.Context
+import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import androidx.core.content.ContextCompat
 import top.coclyun.clipshare.clipboard_listener.service.ActivityChangedService
+import top.coclyun.clipshare.clipboard_listener.utils.ImageTypeDetector
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
@@ -87,32 +89,29 @@ open class ClipboardListener(
                 val contentResolver = context.contentResolver
                 val mimeType = contentResolver.getType(item.uri);
                 Log.d(TAG, "mimeType:$mimeType")
-                if (mimeType != null && mimeType.startsWith("image")) {
+                if (mimeType != null) {
+                    var cachePath: String? = null
                     type = ClipboardContentType.Image;
-                    val currentTimeMillis = System.currentTimeMillis()
-                    val dateFormat = SimpleDateFormat("yyyy-MM-dd_HH-mm-ss-S", Locale.CHINA)
-                    val fileName = dateFormat.format(Date(currentTimeMillis))
-                    val cachePath =
-                        context.externalCacheDir?.absolutePath + "/" + fileName + ".png";
-                    Log.d(TAG, "cachePath $cachePath")
-                    try {
-                        val inputStream = contentResolver.openInputStream(item.uri)
-                        if (inputStream == null) {
-                            Log.e(TAG, "Failed to open input stream for URI: ${item.uri}")
-                            return false;
+                    if (mimeType.startsWith("image")) {
+                        cachePath = processImagePath(item.uri)
+                    } else {
+                        try {
+                            val inputStream = contentResolver.openInputStream(item.uri)
+                            if (inputStream == null) {
+                                Log.e(TAG, "Failed to open input stream for URI: ${item.uri}")
+                                return false;
+                            }
+                            val isImage = ImageTypeDetector.isImageStream(inputStream)
+                            if (isImage) {
+                                cachePath = processImagePath(item.uri)
+                            }
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                            return false
                         }
-                        val destFile = File(cachePath)
-                        val outputStream: OutputStream = FileOutputStream(destFile)
-                        val buffer = ByteArray(10240)
-                        var length: Int
-                        while (inputStream.read(buffer).also { length = it } > 0) {
-                            outputStream.write(buffer, 0, length)
-                        }
-                        inputStream.close()
-                        outputStream.close()
-                        Log.d(TAG, "File copied successfully to: $cachePath")
-                    } catch (e: IOException) {
-                        Log.e(TAG, "Error copying file: " + e.message)
+                    }
+                    if (cachePath == null) {
+                        return false
                     }
                     content = cachePath;
                 }
@@ -126,6 +125,36 @@ open class ClipboardListener(
             Log.d(TAG, "onClipboardChanged error: ${e.message}")
             return false
         }
+    }
+
+    fun processImagePath(uri: Uri): String? {
+        val contentResolver = context.contentResolver
+        val currentTimeMillis = System.currentTimeMillis()
+        val dateFormat = SimpleDateFormat("yyyy-MM-dd_HH-mm-ss-S", Locale.CHINA)
+        val fileName = dateFormat.format(Date(currentTimeMillis))
+        val cachePath = context.externalCacheDir?.absolutePath + "/" + fileName + ".png";
+        Log.d(TAG, "cachePath $cachePath")
+        try {
+            val inputStream = contentResolver.openInputStream(uri)
+            if (inputStream == null) {
+                Log.e(TAG, "Failed to open input stream for URI: ${uri}")
+                return null;
+            }
+            val destFile = File(cachePath)
+            val outputStream: OutputStream = FileOutputStream(destFile)
+            val buffer = ByteArray(10240)
+            var length: Int
+            while (inputStream.read(buffer).also { length = it } > 0) {
+                outputStream.write(buffer, 0, length)
+            }
+            inputStream.close()
+            outputStream.close()
+            Log.d(TAG, "File copied successfully to: $cachePath")
+        } catch (e: IOException) {
+            Log.e(TAG, "Error copying file: " + e.message)
+            return null
+        }
+        return cachePath
     }
 
     fun addObserver(observer: ClipboardObserver) {
