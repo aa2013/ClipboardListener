@@ -1,6 +1,6 @@
 # clipshare_clipboard_listener
 
-A clipboard listener plugin that currently supports Android, Windows, and Linux. It also supports background synchronization on Android 10+ systems (dependent on Shizuku or Root).
+A clipboard listener plugin that currently supports Android, Windows, MacOS and Linux. It also supports background synchronization on Android 10+ systems (dependent on Shizuku or Root).
 
 This project was extracted from [ClipShare](https://github.com/aa2013/ClipShare).
 
@@ -36,7 +36,7 @@ Add this to your package's `pubspec.yaml` file:
 
 ```yaml
 dependencies:  
-  clipshare_clipboard_listener: ^1.2.3
+  clipshare_clipboard_listener: ^1.2.4
 ```
 
 ### Usage

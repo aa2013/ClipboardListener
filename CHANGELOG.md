@@ -1,3 +1,8 @@
+## 1.2.4
+* Android 修复 在ColorOS上因创建悬浮窗可能引起的系统奔溃导致的软重启
+---
+* Android Fix: Possible system crashes and restarts caused by creating floating windows on ColorOS
+
 ## 1.2.3
 * Android 修复 当写入的图片 MIMEType 非 'image' 时通过文件头判断
 ---

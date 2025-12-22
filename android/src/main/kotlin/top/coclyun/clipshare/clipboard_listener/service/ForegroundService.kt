@@ -13,13 +13,18 @@ import android.graphics.PixelFormat
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.os.Message
 import android.provider.Settings
 import android.util.Log
+import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.view.WindowManager.LayoutParams
+import android.view.WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+import android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+import android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
 import androidx.core.app.NotificationCompat
 import rikka.shizuku.Shizuku
 import rikka.shizuku.Shizuku.OnBinderDeadListener
@@ -61,6 +66,8 @@ class ForegroundService : Service() {
     private var useRoot: Boolean = false
     private lateinit var listeningWay: ClipboardListeningWay
     private var listenerThread: Thread? = null
+    private var lastChangedTime: Long = 0
+    private var changedMinIntervalTime: Long = 200
 
     //region Clipboard Listener
     private val clipboardListenerCallback = object : IOnClipboardChanged.Stub() {
@@ -95,16 +102,22 @@ class ForegroundService : Service() {
     override fun onCreate() {
         super.onCreate()
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
-        mainParams = LayoutParams()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            mainParams.type = LayoutParams.TYPE_APPLICATION_OVERLAY;
+        val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            LayoutParams.TYPE_APPLICATION_OVERLAY;
         } else {
-            mainParams.type = LayoutParams.TYPE_PHONE;
+            LayoutParams.TYPE_PHONE;
         }
-        mainParams.format = PixelFormat.RGBA_8888;
-        //不能使用warp_content 否则无法获取焦点
-        mainParams.width = 1
-        mainParams.height = 1
+        mainParams = LayoutParams(
+            16,
+            16,
+            type,
+            FLAG_NOT_TOUCHABLE or FLAG_LAYOUT_NO_LIMITS,
+            PixelFormat.RGBA_8888
+        )
+        mainParams.flags
+        mainParams.gravity = Gravity.START or Gravity.TOP
+        mainParams.x = 0
+        mainParams.y = 0
     }
 
     private fun showFloatFocusView() {
@@ -113,20 +126,29 @@ class ForegroundService : Service() {
             return
         }
         Log.d(TAG, "canDrawOverlays: true")
+        val now = System.currentTimeMillis()
+        val offset = now - lastChangedTime
+        if (offset < changedMinIntervalTime) {
+            Log.d(TAG, "Time since last change is less than $changedMinIntervalTime ms, actually is $offset ms")
+            return
+        }
+        lastChangedTime = now
         val layoutInflater = baseContext.getSystemService(LAYOUT_INFLATER_SERVICE) as LayoutInflater
         view = layoutInflater.inflate(R.layout.float_focus, null) as ViewGroup
         if (view == null) return
         windowManager.addView(view, mainParams)
         val hasFocus = view!!.requestFocus()
         val topPkgName = ActivityChangedService.topPkgName;
-        Log.d(
-            TAG,
-            "hasFocus: $hasFocus, topPkgName: ${ActivityChangedService.topPkgName}, this:${this}"
-        )
-        if (ClipboardListener.instance.onClipboardChanged(topPkgName)) {
-            ActivityChangedService.topPkgName = null
+        Log.d(TAG, "hasFocus: $hasFocus, topPkgName: ${ActivityChangedService.topPkgName}, this:${this}")
+        Handler(Looper.getMainLooper()).post {
+            // 延后一帧执行
+            if (ClipboardListener.instance.onClipboardChanged(topPkgName)) {
+                ActivityChangedService.topPkgName = null
+            } else {
+                Log.d(TAG, "fetch clipboard data failed!")
+            }
+            removeFloatFocusView()
         }
-        removeFloatFocusView()
     }
 
     private fun removeFloatFocusView() {
