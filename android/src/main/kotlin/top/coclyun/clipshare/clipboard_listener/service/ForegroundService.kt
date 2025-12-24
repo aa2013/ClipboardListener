@@ -332,9 +332,7 @@ class ForegroundService : Service() {
         // 创建并显示通知
         val notification = buildNotification()
 
-        val manger = getSystemService(
-            NOTIFICATION_SERVICE
-        ) as NotificationManager
+        val manger = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         manger.notify(foregroundServiceNotificationId, notification)
         startForeground(foregroundServiceNotificationId, notification)
     }
@@ -374,9 +372,6 @@ class ForegroundService : Service() {
     }
 
     private fun notifyForeground(title: String, content: String) {
-        if (plugin!!.mainActivity == null) {
-            return;
-        }
         val updatedBuilder: NotificationCompat.Builder =
             NotificationCompat.Builder(this, foregroundServiceNotifyChannelId)
                 .setSmallIcon(getAppIcon(applicationContext))
@@ -409,9 +404,9 @@ class ForegroundService : Service() {
     }
 
     private fun createPendingIntent(): PendingIntent {
-        val intent = Intent(plugin!!.mainActivity, plugin!!.mainActivity!!::class.java)
+        val intent = Intent(plugin!!.context, plugin!!.activityClass)
         return PendingIntent.getActivity(
-            plugin!!.mainActivity,
+            plugin!!.context,
             0,
             intent,
             PendingIntent.FLAG_IMMUTABLE

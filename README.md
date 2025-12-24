@@ -1,6 +1,6 @@
 # clipshare_clipboard_listener
 
-剪贴板监听插件，当前支持 Android、Windows、Linux、MacOS 版本，同时，支持在Android10+系统上后台同步（依赖于Shizuku或Root）
+剪贴板监听插件，当前支持 Android、Windows、Linux、MacOS 版本，同时，支持在Android10+系统上后台同步（依赖于 Shizuku 或 Root）
 
 该项目是从 [ClipShare](https://github.com/aa2013/ClipShare) 中抽离出来的
 
@@ -34,7 +34,7 @@
 
 ```yaml
 dependencies:
-  clipshare_clipboard_listener: ^1.2.4
+  clipshare_clipboard_listener: ^1.2.5
 ```
 
 ### 用法

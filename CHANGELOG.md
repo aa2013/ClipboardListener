@@ -1,3 +1,9 @@
+## 1.2.5
+* Android 优化 前台服务启动相关代码，不要使用 Activity 的 context
+---
+* Android Fix: Possible system crashes and restarts caused by creating floating windows on ColorOS
+
+
 ## 1.2.4
 * Android 修复 在ColorOS上因创建悬浮窗可能引起的系统奔溃导致的软重启
 ---

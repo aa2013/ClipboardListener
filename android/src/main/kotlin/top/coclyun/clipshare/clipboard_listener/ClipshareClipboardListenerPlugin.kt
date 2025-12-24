@@ -66,11 +66,11 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
     ClipboardListener.ClipboardObserver, ActivityAware {
     private val TAG = "ClipboardListenerPlugin"
     private lateinit var channel: MethodChannel
-    private lateinit var context: Context
+    lateinit var context: Context
+    lateinit var activityClass: Class<Activity>
     private val requestShizukuCode = 5001
     var currentEnv: EnvironmentType? = null
     var config: Config = Config()
-    var mainActivity: Activity? = null
     var listening: Boolean = false
     var listeningServiceArgs: UserServiceArgs? = null
     var listeningServiceConn: ServiceConnection? = null
@@ -383,7 +383,8 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
 
     private fun requestAccessibility(call: MethodCall, result: Result) {
         val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-        mainActivity?.startActivity(intent)
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        context.startActivity(intent)
     }
 
     //endregion
@@ -473,7 +474,11 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
             if (running) {
                 context.stopService(serviceIntent)
             }
-            context.startService(serviceIntent)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(serviceIntent)
+            } else {
+                context.startService(serviceIntent)
+            }
             return true
         } catch (e: Exception) {
             e.printStackTrace()
@@ -687,23 +692,15 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
 
     //region ActivityAware
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
-        mainActivity = binding.activity
+        activityClass = binding.activity.javaClass
     }
 
     override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) {
-        mainActivity = binding.activity
+        activityClass = binding.activity.javaClass
     }
 
-    override fun onDetachedFromActivityForConfigChanges() {
-        mainActivity = null
-        clipboardSourceScope.cancel()
-    }
+    override fun onDetachedFromActivityForConfigChanges() {}
 
-
-    override fun onDetachedFromActivity() {
-        mainActivity = null
-        stopListening()
-        clipboardSourceScope.cancel()
-    }
+    override fun onDetachedFromActivity() {}
     //endregion
 }
