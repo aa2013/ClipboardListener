@@ -1,7 +1,7 @@
 ## 1.2.5
 * Android 优化 前台服务启动相关代码，不要使用 Activity 的 context
 ---
-* Android Fix: Possible system crashes and restarts caused by creating floating windows on ColorOS
+* Android optimization frontend service startup related code, do not use the context of the activity
 
 
 ## 1.2.4
