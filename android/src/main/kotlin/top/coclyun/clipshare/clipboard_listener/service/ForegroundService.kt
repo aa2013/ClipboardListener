@@ -404,7 +404,7 @@ class ForegroundService : Service() {
     }
 
     private fun createPendingIntent(): PendingIntent {
-        val intent = Intent(plugin!!.context, plugin!!.activityClass)
+        val intent = Intent(plugin!!.context, ClipshareClipboardListenerPlugin.activityClass)
         return PendingIntent.getActivity(
             plugin!!.context,
             0,

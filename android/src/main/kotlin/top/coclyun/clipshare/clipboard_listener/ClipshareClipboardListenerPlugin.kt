@@ -67,7 +67,6 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
     private val TAG = "ClipboardListenerPlugin"
     private lateinit var channel: MethodChannel
     lateinit var context: Context
-    lateinit var activityClass: Class<Activity>
     private val requestShizukuCode = 5001
     var currentEnv: EnvironmentType? = null
     var config: Config = Config()
@@ -84,6 +83,8 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
         @JvmStatic
         @SuppressLint("StaticFieldLeak")
         var instance: ClipshareClipboardListenerPlugin? = null
+        @JvmStatic
+        lateinit var activityClass: Class<out Activity>
     }
 
     override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
