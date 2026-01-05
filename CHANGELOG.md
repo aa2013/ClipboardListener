@@ -1,3 +1,10 @@
+## 1.2.6
+* Windows 修复 当剪贴板中含有 'ExcludeClipboardContentFromMonitorProcessing' 格式时未释放剪贴板导致其他进程无法复制的问题
+* Android 优化 增加方法手动设置 Activity Class
+---
+* Windows fix: Fixed an issue where the clipboard was not released when it contained the 'ExcludeClipboardContentFromMonitorProcessing' format, preventing other processes from copying.
+* Android optimization: Added a method to manually set the Activity Class.
+
 ## 1.2.5
 * Android 优化 前台服务启动相关代码，不要使用 Activity 的 context
 ---
