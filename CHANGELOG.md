@@ -1,3 +1,8 @@
+## 1.2.7
+* Windows 允许启用或关闭排除格式记录
+---
+* Windows allows enable or disable the 'ExcludeClipboardContentFromMonitorProcessing' format
+
 ## 1.2.6
 * Windows 修复 当剪贴板中含有 'ExcludeClipboardContentFromMonitorProcessing' 格式时未释放剪贴板导致其他进程无法复制的问题
 * Android 优化 增加方法手动设置 Activity Class

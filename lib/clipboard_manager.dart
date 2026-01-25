@@ -52,6 +52,8 @@ const kCopy = "copy";
 const kGetSelectedFiles = "getSelectedFiles";
 const kStoreCurrentWindowHwnd = "storeCurrentWindowHwnd";
 const kPasteToPreviousWindow = "pasteToPreviousWindow";
+const kIsEnableExcludeFormat = "isEnableExcludeFormat";
+const kEnableExcludeFormat = "enableExcludeFormat";
 
 //Desktop
 const kSetTempFileDir = "setTempFileDir";
@@ -170,6 +172,19 @@ class ClipboardManager {
   Future<void> storeCurrentWindowHwnd() {
     if (!Platform.isWindows && !Platform.isMacOS && !Platform.isLinux) return Future.value();
     return _channel.invokeMethod(kStoreCurrentWindowHwnd);
+  }
+
+  /// Sets whether to enable privacy format exclusion (ExcludeClipboardContentFromMonitorProcessing), only available on Windows.
+  Future<void> setExcludeFormatEnabled(bool enable) {
+    if (!Platform.isWindows) return Future.value();
+    final args = {"enable": enable};
+    return _channel.invokeMethod(kEnableExcludeFormat, args);
+  }
+
+  /// Determines whether privacy formats are excluded (ExcludeClipboardContentFromMonitorProcessing), only available on Windows.
+  Future<bool> isEnableExcludeFormat() {
+    if (!Platform.isWindows) return Future.value(false);
+    return _channel.invokeMethod(kIsEnableExcludeFormat).then((value) => value ?? false);
   }
 
   ///send Ctrl + V to previous Window

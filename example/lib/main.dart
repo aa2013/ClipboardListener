@@ -33,6 +33,7 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
   ClipboardSource? source;
   EnvironmentType env = EnvironmentType.none;
   bool isGranted = false;
+  bool excludeFormatEnabled = true;
   ClipboardListeningWay way = ClipboardListeningWay.logs;
   bool hasAlertWindowPermission = false;
   bool hasNotificationPermission = false;
@@ -54,6 +55,13 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
         });
       });
       checkAndroidPermissions();
+    }
+    if (Platform.isWindows) {
+      clipboardManager.isEnableExcludeFormat().then((enabled) {
+        setState(() {
+          excludeFormatEnabled = enabled;
+        });
+      });
     }
   }
 
@@ -325,6 +333,22 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
                       ),
                     ],
                   ),
+                ),
+                //endregion
+                //region Windows
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    const Text("ExcludeClipboardContentFromMonitorProcessing:"),
+                    Switch(
+                        value: excludeFormatEnabled,
+                        onChanged: (checked) async {
+                          await clipboardManager.setExcludeFormatEnabled(checked);
+                          setState(() {
+                            excludeFormatEnabled = checked;
+                          });
+                        })
+                  ],
                 ),
                 //endregion
                 Text('type: $type\n\ncontent:\n$content\n\nsource:${source?.name}\n\n'),
