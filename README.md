@@ -144,9 +144,9 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
 | checkIsRunning                | 检查是否正在监听                                                  | ✔️      | ✔️      | ✔️    | ✔️    | ✖️  |
 | copy                          | 复制内容（不会触发`onClipboardChanged`事件）                          | ✔️      | ✔️      | ✔️    | ✔️    | ✖️  |
 | getSelectedFiles              | 获取资源管理器中选择的文件                                             | ✖️      | ✔️      | ✖️    | ✖️    | ✖️  |
-| isEnableExcludeFormat         | 是否接收排除格式                                                  | ✖️      | ✔️      | ✔️    | ✔️    | ✖️  |
+| isEnableExcludeFormat         | 是否接收排除格式                                                  | ✖️      | ✔️      | ✖️    | ✖️    | ✖️  |
 | setExcludeFormatEnabled       | 设置是否接收排除格式                                                | ✖️      | ✔️      | ✖️    | ✖️    | ✖️  |
-| storeCurrentWindowHwnd        | 存储当前窗体的句柄                                                 | ✖️      | ✔️      | ✖️    | ✖️    | ✖️  |
+| storeCurrentWindowHwnd        | 存储当前窗体的句柄                                                 | ✖️      | ✔️      | ✔️    | ✔️    | ✖️  |
 | pasteToPreviousWindow         | 粘贴到前一个窗体中（需要在复制前先调用`storeCurrentWindowHwnd`）              | ✖️      | ✔️      | ✔️    | ✔️    | ✖️  |
 | setTempFileDir                | 设置临时文件目录，复制图片后会将文件暂存到该路径下，默认为当前程序路径下                      | ✖️      | ✔️      | ✔️    | ✖️    | ✖️  |
 | onPermissionStatusChanged     | 权限状态改变事件，当前只有Android有效                                    | ✔️      | ✖️      | ✖️    | ✖️    | ✖️  |
