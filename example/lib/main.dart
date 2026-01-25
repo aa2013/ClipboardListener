@@ -10,7 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:hotkey_manager/hotkey_manager.dart';
 import 'package:permission_handler/permission_handler.dart';
-
+import 'package:path_provider/path_provider.dart';
 void main(List<String> args) {
   var isMultiWindow = args.firstOrNull == 'multi_window';
   if (isMultiWindow) {
@@ -38,6 +38,7 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
   bool hasAlertWindowPermission = false;
   bool hasNotificationPermission = false;
   bool hasAccessibilityPermission = false;
+  var startedPip = false;
   final controller = TextEditingController();
 
   @override
@@ -45,8 +46,10 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
     super.initState();
     clipboardManager.addListener(this);
     WidgetsBinding.instance.addObserver(this);
-    initHotKey();
-    initMultiWindowEvent();
+    if (Platform.isMacOS || Platform.isLinux || Platform.isWindows) {
+      initHotKey();
+      initMultiWindowEvent();
+    }
     if (Platform.isAndroid) {
       clipboardManager.getCurrentEnvironment().then((env) {
         setState(() {
@@ -79,6 +82,22 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
     WidgetsBinding.instance.removeObserver(this);
   }
 
+  /// 复制 assets 文件到临时目录
+  Future<String> copyAssetToTemp(String assetPath) async {
+    // 1. 读取 assets 文件内容
+    final byteData = await rootBundle.load(assetPath);
+
+    // 2. 获取临时目录
+    final tempDir = await getTemporaryDirectory();
+    final tempFile = File('${tempDir.path}/${assetPath.split('/').last}');
+
+    // 3. 将 assets 写入临时文件
+    await tempFile.writeAsBytes(
+      byteData.buffer.asUint8List(byteData.offsetInBytes, byteData.lengthInBytes),
+    );
+
+    return tempFile.absolute.path;
+  }
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -100,14 +119,16 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Current environment: ${env.name}, Status: $isGranted'),
+                      Text(
+                          'Current environment: ${env.name}, Status: $isGranted'),
                       Padding(
                         padding: const EdgeInsets.only(left: 10, right: 10),
                         child: Row(
                           children: [
                             GestureDetector(
                               onTap: () {
-                                clipboardManager.requestPermission(EnvironmentType.shizuku);
+                                clipboardManager
+                                    .requestPermission(EnvironmentType.shizuku);
                               },
                               child: const Chip(label: Text("Request Shizuka")),
                             ),
@@ -116,7 +137,8 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
                             ),
                             GestureDetector(
                               onTap: () {
-                                clipboardManager.requestPermission(EnvironmentType.root);
+                                clipboardManager
+                                    .requestPermission(EnvironmentType.root);
                               },
                               child: const Chip(label: Text("Request Root")),
                             ),
@@ -138,15 +160,19 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
                                 if (hasAlertWindowPermission) {
                                   return;
                                 }
-                                final result = await Permission.systemAlertWindow.request();
+                                final result = await Permission
+                                    .systemAlertWindow
+                                    .request();
                                 print("result isDenied = ${result.isDenied}");
                                 if (result.isGranted) {
                                   setState(() {
                                     hasAlertWindowPermission = result.isGranted;
                                   });
-                                  showSnackBarSuc(context, "SystemAlertWindow granted");
+                                  showSnackBarSuc(
+                                      context, "SystemAlertWindow granted");
                                 } else {
-                                  showSnackBarErr(context, "SystemAlertWindow denied");
+                                  showSnackBarErr(
+                                      context, "SystemAlertWindow denied");
                                 }
                               },
                             ),
@@ -158,14 +184,18 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
                                 if (hasNotificationPermission) {
                                   return;
                                 }
-                                final result = await Permission.notification.request();
+                                final result =
+                                    await Permission.notification.request();
                                 if (result.isGranted) {
                                   setState(() {
-                                    hasNotificationPermission = result.isGranted;
+                                    hasNotificationPermission =
+                                        result.isGranted;
                                   });
-                                  showSnackBarSuc(context, "Notification granted");
+                                  showSnackBarSuc(
+                                      context, "Notification granted");
                                 } else {
-                                  showSnackBarErr(context, "Notification denied");
+                                  showSnackBarErr(
+                                      context, "Notification denied");
                                 }
                               },
                             ),
@@ -206,7 +236,9 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
                                 child: Chip(
                                   label: Text(
                                     "Start listening by Shizuku",
-                                    style: env == EnvironmentType.shizuku ? null : const TextStyle(color: Colors.grey),
+                                    style: env == EnvironmentType.shizuku
+                                        ? null
+                                        : const TextStyle(color: Colors.grey),
                                   ),
                                 ),
                               ),
@@ -223,7 +255,9 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
                                 child: Chip(
                                   label: Text(
                                     "Start listening by Root",
-                                    style: env == EnvironmentType.root ? null : const TextStyle(color: Colors.grey),
+                                    style: env == EnvironmentType.root
+                                        ? null
+                                        : const TextStyle(color: Colors.grey),
                                   ),
                                 ),
                               ),
@@ -235,7 +269,8 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
                                     "Listening stopped",
                                   );
                                 },
-                                child: const Chip(label: Text("Stop listening")),
+                                child:
+                                    const Chip(label: Text("Stop listening")),
                               ),
                             ],
                           ),
@@ -336,20 +371,47 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
                 ),
                 //endregion
                 //region Windows
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    const Text("ExcludeClipboardContentFromMonitorProcessing:"),
-                    Switch(
-                        value: excludeFormatEnabled,
-                        onChanged: (checked) async {
-                          await clipboardManager.setExcludeFormatEnabled(checked);
-                          setState(() {
-                            excludeFormatEnabled = checked;
-                          });
-                        })
-                  ],
-                ),
+                if (Platform.isWindows)
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      const Text("ExcludeClipboardContentFromMonitorProcessing:"),
+                      Switch(
+                          value: excludeFormatEnabled,
+                          onChanged: (checked) async {
+                            await clipboardManager
+                                .setExcludeFormatEnabled(checked);
+                            setState(() {
+                              excludeFormatEnabled = checked;
+                            });
+                          })
+                    ],
+                  ),
+                //endregion
+
+                //region ios
+                if (Platform.isIOS)
+                  TextButton(
+                    onPressed: startedPip ? null : () async {
+                      final path = await copyAssetToTemp('assets/pip_video.mp4');
+                      print(path);
+                      await clipboardManager.startPIP(path);
+                      setState(() {
+                        startedPip = true;
+                      });
+                    },
+                    child: Text("Start PIP"),
+                  ),
+                if (Platform.isIOS)
+                  TextButton(
+                    onPressed: startedPip ? () async {
+                      await clipboardManager.stopPIP();
+                      setState(() {
+                        startedPip = false;
+                      });
+                    } : null,
+                    child: Text("Stop PIP"),
+                  ),
                 //endregion
                 Text('type: $type\n\ncontent:\n$content\n\nsource:${source?.name}\n\n'),
                 const SizedBox(height: 10),

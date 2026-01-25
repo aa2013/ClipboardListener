@@ -66,6 +66,8 @@ const kGetShizukuversion = "getShizukuVersion";
 const kGetLatestWriteClipboardSource = "getLatestWriteClipboardSource";
 const kCheckAccessibility = "checkAccessibility";
 const kRequestAccessibility = "requestAccessibility";
+const kStartPip = "startPip";
+const kStopPIP = "stopPIP";
 
 class ClipboardManager {
   final _channel = const MethodChannel(kChannelName);
@@ -242,6 +244,23 @@ class ClipboardManager {
   Future<void> requestAccessibility() async {
     if (!Platform.isAndroid) return;
     return _channel.invokeMethod<void>(kRequestAccessibility, {});
+  }
+
+  ///Start Picture in Picture, [pathOrUrl] is a url or local file path
+  Future<bool> startPIP([String? pathOrUrl]) async {
+    if(!Platform.isIOS){
+      return false;
+    }
+    pathOrUrl = pathOrUrl ?? "https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8";
+    final args = {"path": pathOrUrl};
+    return _channel.invokeMethod<bool>(kStartPip, args).then((value) => value ?? false);
+  }
+
+  Future<bool> stopPIP() async {
+    if(!Platform.isIOS){
+      return false;
+    }
+    return _channel.invokeMethod<bool>(kStopPIP, {}).then((value)=>value??false);
   }
 
   Future<void> _methodCallHandler(MethodCall call) async {

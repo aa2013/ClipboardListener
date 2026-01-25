@@ -19,7 +19,7 @@ Shizuku 或 Root）
 | Windows | ✔️ 完全支持                                   |
 | Linux   | ✔️ 完全支持                                   |
 | macOS   | ✔️ 完全支持                                   |
-| IOS     | ✖️ 暂不支持                                   |
+| iOS     | ✔️ iOS14+ 支持基本的监听功能，但需要依赖画中画              |
 
 ## 剪贴板内容类型
 
@@ -134,15 +134,28 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
 
 > 请看这个插件的示例应用，以了解完整的例子。
 
+## iOS
+
+iOS 需要在 `info.plist` 中增加画中画支持
+
+```
+<key>UIBackgroundModes</key>
+<array>
+	<string>audio</string>
+</array>
+```
+
 ## API
 
 | 方法                            | 描述                                                        | Android | Windows | Linux | macOS | IOS |
 |-------------------------------|-----------------------------------------------------------|---------|---------|-------|-------|-----|
-| onClipboardChanged            | 剪贴板内容更改事件，会携带内容类别、内容、来源信息，来源信息在Linux上基于X11实现              | ✔️      | ✔️      | ✔️    | ✔️    | ✖️  |
-| startListening                | 开始监听                                                      | ✔️      | ✔️      | ✔️    | ✔️    | ✖️  |
-| stopListening                 | 停止监听                                                      | ✔️      | ✔️      | ✔️    | ✔️    | ✖️  |
-| checkIsRunning                | 检查是否正在监听                                                  | ✔️      | ✔️      | ✔️    | ✔️    | ✖️  |
-| copy                          | 复制内容（不会触发`onClipboardChanged`事件）                          | ✔️      | ✔️      | ✔️    | ✔️    | ✖️  |
+| onClipboardChanged            | 剪贴板内容更改事件，会携带内容类别、内容、来源信息，来源信息在Linux上基于X11实现              | ✔️      | ✔️      | ✔️    | ✔️    | ✔️  |
+| startListening                | 开始监听                                                      | ✔️      | ✔️      | ✔️    | ✔️    | ✔️  |
+| stopListening                 | 停止监听                                                      | ✔️      | ✔️      | ✔️    | ✔️    | ✔️  |
+| checkIsRunning                | 检查是否正在监听                                                  | ✔️      | ✔️      | ✔️    | ✔️    | ✔️  |
+| copy                          | 复制内容（不会触发`onClipboardChanged`事件）                          | ✔️      | ✔️      | ✔️    | ✔️    | ✔️  |
+| startPIP                      | 启动画中画                                                     | ✖️      | ✖️      | ✖️    | ✖️    | ✔️  |
+| stopPIP                       | 关闭画中画                                                     | ✖️      | ✖️      | ✖️    | ✖️    | ✔️  |
 | getSelectedFiles              | 获取资源管理器中选择的文件                                             | ✖️      | ✔️      | ✖️    | ✖️    | ✖️  |
 | isEnableExcludeFormat         | 是否接收排除格式                                                  | ✖️      | ✔️      | ✖️    | ✖️    | ✖️  |
 | setExcludeFormatEnabled       | 设置是否接收排除格式                                                | ✖️      | ✔️      | ✖️    | ✖️    | ✖️  |
