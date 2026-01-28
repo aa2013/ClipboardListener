@@ -57,17 +57,19 @@ class ForegroundService : Service() {
     private val TAG = "ForegroundService"
     private val listenerZipFileName = "listener.zip"
 
-    //mHandler用于弱引用和主线程更新UI，避免内存泄漏。
-    private var mHandler = MyHandler(this)
+    private val mainHandler = Handler(Looper.getMainLooper())
     private var plugin: ClipshareClipboardListenerPlugin? = null
     private lateinit var windowManager: WindowManager
     private lateinit var mainParams: LayoutParams
-    private var view: ViewGroup? = null
+    private lateinit var view: ViewGroup
     private var useRoot: Boolean = false
     private lateinit var listeningWay: ClipboardListeningWay
     private var listenerThread: Thread? = null
     private var lastChangedTime: Long = 0
     private var changedMinIntervalTime: Long = 200
+    @Volatile
+    private var isShowFloatView: Boolean = false
+    private val viewLock = Any()
 
     //region Clipboard Listener
     private val clipboardListenerCallback = object : IOnClipboardChanged.Stub() {
@@ -78,20 +80,23 @@ class ForegroundService : Service() {
             if (plugin!!.config.ignoreNextCopy) {
                 plugin!!.config.ignoreNextCopy = false
             } else {
-                mHandler.sendMessage(Message())
+                mainHandler.sendMessage(Message())
+                Log.d(TAG, "listener onChanged")
+                synchronized(viewLock) {
+                    mainHandler.post{
+                        showFloatFocusView()
+                    }
+                }
             }
         }
 
     }
 
     class MyHandler(foregroundService: ForegroundService) : Handler() {
-        private val mOuter: WeakReference<ForegroundService> =
-            WeakReference<ForegroundService>(foregroundService)
+        private val mOuter: WeakReference<ForegroundService> = WeakReference<ForegroundService>(foregroundService)
 
         override fun handleMessage(msg: Message) {
             mOuter.get().let {
-                Log.d("listener onChanged", it.toString())
-                it?.showFloatFocusView()
             }
         }
     }
@@ -118,6 +123,8 @@ class ForegroundService : Service() {
         mainParams.gravity = Gravity.START or Gravity.TOP
         mainParams.x = 0
         mainParams.y = 0
+        val layoutInflater = baseContext.getSystemService(LAYOUT_INFLATER_SERVICE) as LayoutInflater
+        view = layoutInflater.inflate(R.layout.float_focus, null) as ViewGroup
     }
 
     private fun showFloatFocusView() {
@@ -133,14 +140,18 @@ class ForegroundService : Service() {
             return
         }
         lastChangedTime = now
-        val layoutInflater = baseContext.getSystemService(LAYOUT_INFLATER_SERVICE) as LayoutInflater
-        view = layoutInflater.inflate(R.layout.float_focus, null) as ViewGroup
-        if (view == null) return
-        windowManager.addView(view, mainParams)
-        val hasFocus = view!!.requestFocus()
+        if(!isShowFloatView) {
+            try {
+                windowManager.addView(view, mainParams)
+                isShowFloatView = true
+            } catch (e: Exception) {
+                Log.w(TAG, "addView failed", e)
+                return
+            }
+        }
         val topPkgName = ActivityChangedService.topPkgName;
-        Log.d(TAG, "hasFocus: $hasFocus, topPkgName: ${ActivityChangedService.topPkgName}, this:${this}")
-        Handler(Looper.getMainLooper()).post {
+        Log.d(TAG, "topPkgName: ${ActivityChangedService.topPkgName}, this:${this}")
+        mainHandler.post {
             // 延后一帧执行
             if (ClipboardListener.instance.onClipboardChanged(topPkgName)) {
                 ActivityChangedService.topPkgName = null
@@ -149,12 +160,25 @@ class ForegroundService : Service() {
             }
             removeFloatFocusView()
         }
+        //第二层保险延后移除,  在之前的代码中延后一帧执行仍然有可能无法移除悬浮窗导致输入法无法弹出等问题
+        //虽然有可能是并发的问题，但是还是加上试试看吧
+        mainHandler.postDelayed({
+            removeFloatFocusView()
+        }, 100)
     }
 
+    @Synchronized
     private fun removeFloatFocusView() {
-        if (view == null) return
-        windowManager.removeView(view)
-        view = null
+        try {
+            if (isShowFloatView) {
+                windowManager.removeViewImmediate(view)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "removeView failed", e)
+        } finally {
+            isShowFloatView = false
+        }
+
     }
     //endregion
 
