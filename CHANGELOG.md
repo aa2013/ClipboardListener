@@ -1,3 +1,8 @@
+## 1.2.8
+* Android 修复 尝试修复 Android 悬浮窗可能未正确关闭的问题
+---
+* Android fix: Attempted to fix an issue where Android floating windows might not close properly
+
 ## 1.2.7
 * Windows 允许启用或关闭排除格式记录
 ---
