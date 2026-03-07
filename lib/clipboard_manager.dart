@@ -66,6 +66,8 @@ const kGetShizukuversion = "getShizukuVersion";
 const kGetLatestWriteClipboardSource = "getLatestWriteClipboardSource";
 const kCheckAccessibility = "checkAccessibility";
 const kRequestAccessibility = "requestAccessibility";
+const kCheckClipboardPermission = "checkClipboardPermission";
+const kRequestClipboardPermission = "requestClipboardPermission";
 
 class ClipboardManager {
   final _channel = const MethodChannel(kChannelName);
@@ -242,6 +244,25 @@ class ClipboardManager {
   Future<void> requestAccessibility() async {
     if (!Platform.isAndroid) return;
     return _channel.invokeMethod<void>(kRequestAccessibility, {});
+  }
+
+  /// Checks whether the app currently has clipboard permission on Android.
+  ///
+  /// Some Android systems grant clipboard access only while the app is in use,
+  /// which prevents clipboard operations in the background. This method is used
+  /// to verify whether full clipboard access is available.
+  Future<bool> checkClipboardPermission() async {
+    if (!Platform.isAndroid) return false;
+    return _channel.invokeMethod<bool?>(kCheckClipboardPermission, {}).then((res) => res ?? false);
+  }
+
+  /// Requests clipboard permission on Android.
+  ///
+  /// This is mainly used on systems where clipboard access is limited to
+  /// "allow only while using the app", which can block background clipboard usage.
+  Future<void> requestClipboardPermission() async {
+    if (!Platform.isAndroid) return;
+    await _channel.invokeMethod<void>(kRequestClipboardPermission, {});
   }
 
   Future<void> _methodCallHandler(MethodCall call) async {

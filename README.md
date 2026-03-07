@@ -35,7 +35,7 @@ Shizuku 或 Root）
 
 ```yaml
 dependencies:
-  clipshare_clipboard_listener: ^1.2.8
+  clipshare_clipboard_listener: ^1.2.9
 ```
 
 ### 用法
@@ -65,6 +65,9 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
 
   //无障碍服务，Android 上若需要剪贴板来源需要请求该权限
   bool hasAccessibilityPermission = false;
+
+  //剪贴板权限，Android 上部分系统默认设置为使用时允许，此时应用无法在后台操作剪贴板，请求该权限可解决
+  bool hasClipboardPermission = false;
 
   var env = EnvironmentType.none;
 
@@ -102,6 +105,7 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
     hasAlertWindowPermission = await Permission.systemAlertWindow.isGranted;
     hasNotificationPermission = await Permission.notification.isGranted;
     hasAccessibilityPermission = await clipboardManager.checkAccessibility();
+    hasClipboardPermission = await clipboardManager.checkClipboardPermission();
     setState(() {});
   }
 
@@ -156,4 +160,6 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
 | getLatestWriteClipboardSource | 获取最近一次写入剪贴板的应用信息（无需无障碍，通过dumpsys，需要Shizuku或Root权限）        | ✔️      | ✖️      | ✖️    | ✖️    | ✖️  |
 | checkAccessibility            | 检查无障碍权限，如无该权限，Andorid系统下`onClipboardChanged`的来源信息为 `null` | ✔️      | ✖️      | ✖️    | ✖️    | ✖️  |
 | requestAccessibility          | 请求无障碍权限                                                   | ✔️      | ✖️      | ✖️    | ✖️    | ✖️  |
+| checkClipboardPermission      | 检查剪贴板权限                                                   | ✔️      | ✖️      | ✖️    | ✖️    | ✖️  |
+| requestClipboardPermission    | 请求并修改剪贴板权限（需要 Shizuku 或 root）                             | ✔️      | ✖️      | ✖️    | ✖️    | ✖️  |
 

@@ -38,7 +38,7 @@ Add this to your package's `pubspec.yaml` file:
 
 ```yaml
 dependencies:
-  clipshare_clipboard_listener: ^1.2.8
+  clipshare_clipboard_listener: ^1.2.9
 ```
 
 ### Usage
@@ -68,6 +68,10 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
 
   // Accessibility service (required for clipboard source info on Android)  
   bool hasAccessibilityPermission = false;
+
+  // Clipboard permission: on some Android systems, the default is “allow only while using the app,”
+  // which prevents the app from accessing the clipboard in the background. Requesting this permission resolves the issue.
+  bool hasClipboardPermission = false;
 
   var env = EnvironmentType.none;
 
@@ -105,6 +109,7 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
     hasAlertWindowPermission = await Permission.systemAlertWindow.isGranted;
     hasNotificationPermission = await Permission.notification.isGranted;
     hasAccessibilityPermission = await clipboardManager.checkAccessibility();
+    hasClipboardPermission = await clipboardManager.checkClipboardPermission();
     setState(() {});
   }
 
@@ -157,3 +162,5 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
 | getLatestWriteClipboardSource | Get the latest app that wrote to the clipboard (requires Shizuku or Root)                                                        | ✔️      | ✖️      | ✖️    | ✖️    | ✖️  |
 | checkAccessibility            | Check accessibility permissions (required for clipboard source info on Android)                                                  | ✔️      | ✖️      | ✖️    | ✖️    | ✖️  |
 | requestAccessibility          | Request accessibility permissions                                                                                                | ✔️      | ✖️      | ✖️    | ✖️    | ✖️  |
+| checkClipboardPermission      | Check clipboard permission                                                                                                       | ✔️      | ✖️      | ✖️    | ✖️    | ✖️  |
+| requestClipboardPermission    | Request and modify clipboard permission (requires Shizuku or root)                                                               | ✔️      | ✖️      | ✖️    | ✖️    | ✖️  |

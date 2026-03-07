@@ -38,6 +38,7 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
   bool hasAlertWindowPermission = false;
   bool hasNotificationPermission = false;
   bool hasAccessibilityPermission = false;
+  bool hasClipboardPermission = false;
   final controller = TextEditingController();
 
   @override
@@ -69,6 +70,7 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
     hasAlertWindowPermission = await Permission.systemAlertWindow.isGranted;
     hasNotificationPermission = await Permission.notification.isGranted;
     hasAccessibilityPermission = await clipboardManager.checkAccessibility();
+    hasClipboardPermission = await clipboardManager.checkClipboardPermission();
     setState(() {});
   }
 
@@ -178,6 +180,20 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
                                   return;
                                 }
                                 clipboardManager.requestAccessibility();
+                              },
+                            ),
+                            const SizedBox(width: 10),
+                            RawChip(
+                              label: const Text("Clipboard"),
+                              selected: hasClipboardPermission,
+                              onSelected: (_) async {
+                                if (hasClipboardPermission) {
+                                  return;
+                                }
+                                await clipboardManager.requestClipboardPermission();
+                                hasClipboardPermission = await clipboardManager.checkClipboardPermission();
+                                setState(() {
+                                });
                               },
                             ),
                           ],

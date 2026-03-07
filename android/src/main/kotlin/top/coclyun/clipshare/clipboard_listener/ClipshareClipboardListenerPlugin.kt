@@ -29,13 +29,15 @@ import io.flutter.plugin.common.MethodChannel.Result
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import rikka.shizuku.Shizuku
 import rikka.shizuku.Shizuku.UserServiceArgs
 import top.coclyun.clipshare.clipboard_listener.service.ActivityChangedService
 import top.coclyun.clipshare.clipboard_listener.service.ClipboardListenerService
+import top.coclyun.clipshare.clipboard_listener.service.CommandRunnerService
 import top.coclyun.clipshare.clipboard_listener.service.ForegroundService
 import top.coclyun.clipshare.clipboard_listener.service.LatestWriteClipboardPkgService
 import top.coclyun.clipshare.clipboard_listener.utils.getAppIconAsBase64
@@ -56,6 +58,8 @@ const val GET_SHIZUKUVERSION = "getShizukuVersion"
 const val CHECK_IS_RUNNING = "checkIsRunning"
 const val CHECK_PERMISSION = "checkPermission"
 const val REQUEST_PERMISSION = "requestPermission"
+const val CHECK_CLIPBOARD_PERMISSION = "checkClipboardPermission"
+const val REQUEST_CLIPBOARD_PERMISSION = "requestClipboardPermission"
 const val CHECK_ACCESSIBILITY = "checkAccessibility"
 const val REQUEST_ACCESSIBILITY = "requestAccessibility"
 const val COPY = "copy"
@@ -77,12 +81,15 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
     var clipboardSourceServiceConn: ServiceConnection? = null
     var latestWriteClipboardPkgService: ILatestWriteClipboardPkgService? = null
     val latestWriteClipboardPkgShellFileName = "readLastWriteClipboardPkg.sh"
+    private var commandRunnerService: ICommandRunnerService? = null
+    private val commandRunnerScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val clipboardSourceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
     companion object {
         @JvmStatic
         @SuppressLint("StaticFieldLeak")
         var instance: ClipshareClipboardListenerPlugin? = null
+
         @JvmStatic
         lateinit var activityClass: Class<out Activity>
     }
@@ -96,7 +103,7 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
                 config.applicationId,
                 ClipboardListenerService::class.java.name
             )
-        ).daemon(false).processNameSuffix("listening-service")
+        ).daemon(false).processNameSuffix("clipshare-listening-service")
         Log.d(TAG, "applicationId: ${config.applicationId}")
         Shizuku.addRequestPermissionResultListener(this);
         currentEnv = getCurrentEnvironment()
@@ -139,6 +146,10 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
             CHECK_ACCESSIBILITY -> checkAccessibility(call, result)
 
             REQUEST_ACCESSIBILITY -> requestAccessibility(call, result)
+
+            CHECK_CLIPBOARD_PERMISSION -> checkClipboardPermission(call, result)
+
+            REQUEST_CLIPBOARD_PERMISSION -> requestClipboardPermission(call, result)
         }
     }
 
@@ -371,7 +382,7 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
         result.success(isAccessibilityServiceEnabled(context, ActivityChangedService::class.java))
     }
 
-    fun isAccessibilityServiceEnabled(
+    private fun isAccessibilityServiceEnabled(
         context: Context,
         service: Class<out AccessibilityService?>
     ): Boolean {
@@ -388,7 +399,107 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
         context.startActivity(intent)
     }
 
+    private fun checkClipboardPermission(call: MethodCall, result: Result) {
+        if (currentEnv != EnvironmentType.root && currentEnv != EnvironmentType.shizuku) {
+            result.success(false)
+        }
+        commandRunnerScope.launch {
+            if (commandRunnerService == null) {
+                initCommandRunnerService()
+                waitCommandRunnerService()
+            }
+            if (commandRunnerService != null) {
+                val res = commandRunnerService!!.run(
+                    "cmd appops get ${config.applicationId} | grep CLIPBOARD",
+                    currentEnv == EnvironmentType.root
+                )
+                Log.d(TAG, res)
+                if (res.contains("READ_CLIPBOARD: allow") && res.contains("WRITE_CLIPBOARD: allow")) {
+                    result.success(true)
+                } else {
+                    result.success(false)
+                }
+            } else {
+                result.error("commandRunnerService not init", null, null)
+            }
+        }
+    }
+
+    private fun requestClipboardPermission(call: MethodCall, result: Result) {
+
+        if (currentEnv != EnvironmentType.root && currentEnv != EnvironmentType.shizuku) {
+            result.success(false)
+        }
+        commandRunnerScope.launch {
+            if (currentEnv == EnvironmentType.shizuku && commandRunnerService == null) {
+                initCommandRunnerService()
+                waitCommandRunnerService()
+            }
+            if (commandRunnerService != null) {
+                commandRunnerService!!.run(
+                    "cmd appops set ${config.applicationId} WRITE_CLIPBOARD allow",
+                    currentEnv == EnvironmentType.root
+                )
+                commandRunnerService!!.run(
+                    "cmd appops set ${config.applicationId} READ_CLIPBOARD allow",
+                    currentEnv == EnvironmentType.root
+                )
+                result.success(null)
+            } else {
+                result.error("commandRunnerService not init", null, null)
+            }
+        }
+    }
+
     //endregion
+
+    @Synchronized
+    private fun initCommandRunnerService() {
+        if (commandRunnerService != null) {
+            return
+        }
+        if (currentEnv == EnvironmentType.root && commandRunnerService == null) {
+            commandRunnerService = CommandRunnerService()
+            return
+        }
+        val serviceArgs = UserServiceArgs(
+            ComponentName(
+                config.applicationId,
+                CommandRunnerService::class.java.name
+            )
+        ).daemon(false).processNameSuffix("clipshare-command-service")
+        val serviceConn = object : ServiceConnection {
+            override fun onServiceConnected(name: ComponentName, binder: IBinder) {
+                Log.d(TAG, "onServiceConnected ${name.className}")
+                try {
+                    commandRunnerService = ICommandRunnerService.Stub.asInterface(binder)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+
+            override fun onServiceDisconnected(name: ComponentName) {
+                try {
+                    commandRunnerService?.destroy()
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                } finally {
+                    commandRunnerService = null;
+                }
+                Log.w(TAG, "onServiceDisconnected ${name.className}")
+            }
+
+        }
+        Shizuku.bindUserService(serviceArgs, serviceConn)
+    }
+
+    suspend fun waitCommandRunnerService(timeout: Long = 5000) {
+        withTimeout(timeout) {
+            while (commandRunnerService == null) {
+                delay(50)
+            }
+        }
+    }
 
     private fun getClipboardSource(pkg: String, timeMs: Long?): Map<String, String?> {
         var time: String? = null
@@ -508,7 +619,7 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
                 config.applicationId,
                 LatestWriteClipboardPkgService::class.java.name
             )
-        ).daemon(false).processNameSuffix("clipboard-service-service")
+        ).daemon(false).processNameSuffix("clipboard-source-service")
         clipboardSourceServiceConn = object : ServiceConnection {
             private var service: ILatestWriteClipboardPkgService? = null
             override fun onServiceConnected(name: ComponentName, binder: IBinder) {

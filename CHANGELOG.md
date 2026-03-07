@@ -1,3 +1,8 @@
+## 1.2.9
+* Android 新增：剪贴板权限的检测和修改方法（需要 Shizuku 或 root）
+---
+* Android feat: Added methods to check and modify clipboard permissions (requires Shizuku or root).
+
 ## 1.2.8
 * Android 修复 尝试修复 Android 悬浮窗可能未正确关闭的问题
 ---
