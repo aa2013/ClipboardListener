@@ -10,7 +10,6 @@ enum ClipboardContentType {
         (e) => e.name.toUpperCase() == value.toUpperCase(),
         orElse: () {
           debugPrint("ClipboardContentType '$value' unknown");
-          throw 'bbb';
           return ClipboardContentType.unknown;
         },
       );
