@@ -106,12 +106,9 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
         ).daemon(false).processNameSuffix("clipshare-listening-service")
         Log.d(TAG, "applicationId: ${config.applicationId}")
         Shizuku.addRequestPermissionResultListener(this);
-        currentEnv = getCurrentEnvironment()
         instance = this
         ClipboardListener.init(this, context)
-        ClipboardListener.instance.addObserver(this)
         channel.setMethodCallHandler(this)
-        Log.d(TAG, "currentEnv $currentEnv")
         initClipboardSourceShizukuService()
     }
 
@@ -156,6 +153,9 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
     //region Flutter Method Channel Events
 
     private fun onStartListeningCalled(call: MethodCall, result: Result) {
+        currentEnv = getCurrentEnvironment()
+        Log.d(TAG, "currentEnv $currentEnv")
+        ClipboardListener.instance.addObserver(this)
         val envStr = call.argument<String>("env")
         val wayStr = call.argument<String>("way")
         var env: EnvironmentType? = null
@@ -400,8 +400,9 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
     }
 
     private fun checkClipboardPermission(call: MethodCall, result: Result) {
-        if (currentEnv != EnvironmentType.root && currentEnv != EnvironmentType.shizuku) {
+        if (currentEnv != null && currentEnv != EnvironmentType.root && currentEnv != EnvironmentType.shizuku) {
             result.success(false)
+            return
         }
         commandRunnerScope.launch {
             if (commandRunnerService == null) {
@@ -426,12 +427,12 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
     }
 
     private fun requestClipboardPermission(call: MethodCall, result: Result) {
-
-        if (currentEnv != EnvironmentType.root && currentEnv != EnvironmentType.shizuku) {
+        if (currentEnv != null && currentEnv != EnvironmentType.root && currentEnv != EnvironmentType.shizuku) {
             result.success(false)
+            return
         }
         commandRunnerScope.launch {
-            if (currentEnv == EnvironmentType.shizuku && commandRunnerService == null) {
+            if (commandRunnerService == null) {
                 initCommandRunnerService()
                 waitCommandRunnerService()
             }
@@ -599,6 +600,7 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
     }
 
     private fun stopListening() {
+        ClipboardListener.instance.removeObserver(this)
         val serviceIntent = Intent(context, ForegroundService::class.java)
         listening = false
         stopClipboardSourceService()

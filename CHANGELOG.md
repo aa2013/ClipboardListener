@@ -1,3 +1,12 @@
+## 1.2.10
+* Android 优化：剪贴板权限检测和请求
+* Android 优化：优化初始化逻辑
+---
+* Android Optimization: Clipboard permission detection and request
+* Android Optimization: Improved initialization logic
+
+翻译英文
+
 ## 1.2.9
 * Android 新增：剪贴板权限的检测和修改方法（需要 Shizuku 或 root）
 ---

@@ -1,4 +1,4 @@
-// ILatestWriteClipboardPkgService.aidl
+// ICommandRunnerService.aidl
 package top.coclyun.clipshare.clipboard_listener;
 
 interface ICommandRunnerService {
