@@ -35,7 +35,7 @@ Shizuku 或 Root）
 
 ```yaml
 dependencies:
-  clipshare_clipboard_listener: ^1.2.10
+  clipshare_clipboard_listener: ^1.2.11
 ```
 
 ### 用法

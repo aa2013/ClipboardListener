@@ -400,7 +400,13 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
     }
 
     private fun checkClipboardPermission(call: MethodCall, result: Result) {
-        if (currentEnv != null && currentEnv != EnvironmentType.root && currentEnv != EnvironmentType.shizuku) {
+        //Android 10以前默认有权限
+        if(currentEnv == EnvironmentType.androidPre10){
+            result.success(true)
+            return;
+        }
+        //无环境，默认失败
+        if(currentEnv == null){
             result.success(false)
             return
         }
@@ -427,8 +433,13 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
     }
 
     private fun requestClipboardPermission(call: MethodCall, result: Result) {
-        if (currentEnv != null && currentEnv != EnvironmentType.root && currentEnv != EnvironmentType.shizuku) {
-            result.success(false)
+        //Android 10以前默认有权限
+        if(currentEnv == EnvironmentType.androidPre10){
+            result.success(null)
+            return;
+        }
+        if(currentEnv == null){
+            result.success(null)
             return
         }
         commandRunnerScope.launch {
