@@ -39,6 +39,7 @@ class CommandRunnerService : ICommandRunnerService.Stub() {
             // 读取结果
             var line: String?
             while (reader.readLine().also { line = it } != null) {
+                line?.let { Log.e(TAG, it) }
                 result.append(line).append("\n")
             }
 

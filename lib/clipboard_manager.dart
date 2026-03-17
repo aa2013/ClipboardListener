@@ -68,6 +68,7 @@ const kCheckAccessibility = "checkAccessibility";
 const kRequestAccessibility = "requestAccessibility";
 const kCheckClipboardPermission = "checkClipboardPermission";
 const kRequestClipboardPermission = "requestClipboardPermission";
+const kExecutePrivilegedCommand = "executePrivilegedCommand";
 
 class ClipboardManager {
   final _channel = const MethodChannel(kChannelName);
@@ -263,6 +264,13 @@ class ClipboardManager {
   Future<void> requestClipboardPermission() async {
     if (!Platform.isAndroid) return;
     await _channel.invokeMethod<void>(kRequestClipboardPermission, {});
+  }
+
+  /// Execute Privileged Command (Shizuku or Root)
+  Future<String?> executePrivilegedCommand(String command) async {
+    if (!Platform.isAndroid) return null;
+    final result =  await _channel.invokeMethod<String>(kExecutePrivilegedCommand, {"command": command});
+    return result?.trim();
   }
 
   Future<void> _methodCallHandler(MethodCall call) async {

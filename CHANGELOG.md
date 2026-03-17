@@ -1,7 +1,13 @@
+## 1.2.12
+* Android 新增：增加特权命令执行方法
+---
+* Android feat: Added privileged command execution method
+
+
 ## 1.2.11
 * Android 修复：无Shizuku或Root权限时检查剪贴板权限崩溃的问题
 ---
-*Android fix: Check clipboard permission crash issue when there is no Shizuku or Root permission
+* Android fix: Check clipboard permission crash issue when there is no Shizuku or Root permission
 
 ## 1.2.10
 * Android 优化：剪贴板权限检测和请求

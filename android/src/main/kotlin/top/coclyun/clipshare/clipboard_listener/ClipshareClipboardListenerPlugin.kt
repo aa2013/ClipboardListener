@@ -62,6 +62,7 @@ const val CHECK_CLIPBOARD_PERMISSION = "checkClipboardPermission"
 const val REQUEST_CLIPBOARD_PERMISSION = "requestClipboardPermission"
 const val CHECK_ACCESSIBILITY = "checkAccessibility"
 const val REQUEST_ACCESSIBILITY = "requestAccessibility"
+const val EXECUTE_PRIVILEGED_COMMAND = "executePrivilegedCommand"
 const val COPY = "copy"
 
 /** ClipboardListenerPlugin */
@@ -147,6 +148,8 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
             CHECK_CLIPBOARD_PERMISSION -> checkClipboardPermission(call, result)
 
             REQUEST_CLIPBOARD_PERMISSION -> requestClipboardPermission(call, result)
+
+            EXECUTE_PRIVILEGED_COMMAND -> executePrivilegedCommand(call, result)
         }
     }
 
@@ -457,6 +460,24 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
                     currentEnv == EnvironmentType.root
                 )
                 result.success(null)
+            } else {
+                result.error("commandRunnerService not init", null, null)
+            }
+        }
+    }
+
+    private fun executePrivilegedCommand(call: MethodCall, result: Result) {
+        commandRunnerScope.launch {
+            if (commandRunnerService == null) {
+                initCommandRunnerService()
+                waitCommandRunnerService()
+            }
+            if (commandRunnerService != null) {
+                val res = commandRunnerService!!.run(
+                    call.argument<String>("command"),
+                    currentEnv == EnvironmentType.root
+                )
+                result.success(res)
             } else {
                 result.error("commandRunnerService not init", null, null)
             }
