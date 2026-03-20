@@ -1,3 +1,8 @@
+## 1.2.14
+* Android 优化：移除 FileProvider
+---
+* Android Optimization: Remove FileProvider
+
 ## 1.2.13
 * Android 修复：复制图片后在某些app中无法粘贴的问题
 ---

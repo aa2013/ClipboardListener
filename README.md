@@ -35,7 +35,7 @@ Shizuku 或 Root）
 
 ```yaml
 dependencies:
-  clipshare_clipboard_listener: ^1.2.13
+  clipshare_clipboard_listener: ^1.2.14
 ```
 
 ### 用法
@@ -137,6 +137,26 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
 ```
 
 > 请看这个插件的示例应用，以了解完整的例子。
+
+## Android
+需要在 `AndroidManifest.xml` 中新增 `provider`
+```xml
+<provider
+    android:name="androidx.core.content.FileProvider"
+    android:authorities="${applicationId}.FileProvider"
+    android:exported="false"
+    android:grantUriPermissions="true">
+    <meta-data
+        android:name="android.support.FILE_PROVIDER_PATHS"
+        android:resource="@xml/file_paths"/>
+</provider>
+```
+然后需要在 `res/xml` 中新增 `file_paths.xml`
+```xml
+<paths>
+    <external-cache-path name="external_cache" path="." />
+</paths>
+```
 
 ## API
 

@@ -38,7 +38,7 @@ Add this to your package's `pubspec.yaml` file:
 
 ```yaml
 dependencies:
-  clipshare_clipboard_listener: ^1.2.13
+  clipshare_clipboard_listener: ^1.2.14
 ```
 
 ### Usage
@@ -139,6 +139,30 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
 ```
 
 > Check the example app of this plugin for a complete implementation.
+
+## Android
+
+You need to add a `provider` in `AndroidManifest.xml`:
+
+```xml
+<provider
+    android:name="androidx.core.content.FileProvider"
+    android:authorities="${applicationId}.FileProvider"
+    android:exported="false"
+    android:grantUriPermissions="true">
+    <meta-data
+        android:name="android.support.FILE_PROVIDER_PATHS"
+        android:resource="@xml/file_paths"/>
+</provider>
+```
+
+Then, you need to add `file_paths.xml` under `res/xml`:
+
+```xml
+<paths>
+    <external-cache-path name="external_cache" path="." />
+</paths>
+```
 
 ## API
 

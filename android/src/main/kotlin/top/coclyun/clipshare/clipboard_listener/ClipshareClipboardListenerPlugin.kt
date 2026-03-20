@@ -352,7 +352,7 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
                     val clipData = ClipData(
                         ClipDescription(
                             "image",
-                            arrayOf("image/jpeg")
+                            arrayOf("image/*")
                         ),
                         ClipData.Item(uri)
                     )
