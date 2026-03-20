@@ -357,12 +357,6 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
                         ClipData.Item(uri)
                     )
                     cm.setPrimaryClip(clipData)
-//                    val clipData =
-//                        ClipData.newUri(
-//                            context.contentResolver,
-//                            "image",
-//                            uri
-//                        )
                 }
             }
             result.success(true)
