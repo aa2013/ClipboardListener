@@ -345,7 +345,7 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
 
                     val uri = FileProvider.getUriForFile(
                         context,
-                        context.packageName + ".clipboard_listener.FileProvider",
+                        context.packageName + ".FileProvider",
                         file
                     )
                     val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
