@@ -88,320 +88,322 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
         appBar: AppBar(
           title: const Text('Example'),
         ),
-        body: Builder(builder: (context) {
-          return SingleChildScrollView(
-            scrollDirection: Axis.vertical,
-            child: Column(
-              children: [
-                const SizedBox(
-                  height: 10,
-                ),
-                //region Android
-                Visibility(
-                  visible: Platform.isAndroid,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Current environment: ${env.name}, Status: $isGranted'),
-                      Padding(
-                        padding: const EdgeInsets.only(left: 10, right: 10),
-                        child: Row(
-                          children: [
-                            GestureDetector(
-                              onTap: () {
-                                clipboardManager.requestPermission(EnvironmentType.shizuku);
-                              },
-                              child: const Chip(label: Text("Request Shizuka")),
-                            ),
-                            const SizedBox(
-                              width: 10,
-                            ),
-                            GestureDetector(
-                              onTap: () {
-                                clipboardManager.requestPermission(EnvironmentType.root);
-                              },
-                              child: const Chip(label: Text("Request Root")),
-                            ),
-                            const SizedBox(
-                              width: 10,
-                            ),
-                          ],
-                        ),
-                      ),
-                      const Text('Permissions:'),
-                      Padding(
-                        padding: const EdgeInsets.only(left: 10, right: 10),
-                        child: Wrap(
-                          children: [
-                            RawChip(
-                              label: const Text("Alert Window"),
-                              selected: hasAlertWindowPermission,
-                              onSelected: (_) async {
-                                if (hasAlertWindowPermission) {
-                                  return;
-                                }
-                                final result = await Permission.systemAlertWindow.request();
-                                print("result isDenied = ${result.isDenied}");
-                                if (result.isGranted) {
-                                  setState(() {
-                                    hasAlertWindowPermission = result.isGranted;
-                                  });
-                                  showSnackBarSuc(context, "SystemAlertWindow granted");
-                                } else {
-                                  showSnackBarErr(context, "SystemAlertWindow denied");
-                                }
-                              },
-                            ),
-                            const SizedBox(width: 10),
-                            RawChip(
-                              label: const Text("Notification"),
-                              selected: hasNotificationPermission,
-                              onSelected: (_) async {
-                                if (hasNotificationPermission) {
-                                  return;
-                                }
-                                final result = await Permission.notification.request();
-                                if (result.isGranted) {
-                                  setState(() {
-                                    hasNotificationPermission = result.isGranted;
-                                  });
-                                  showSnackBarSuc(context, "Notification granted");
-                                } else {
-                                  showSnackBarErr(context, "Notification denied");
-                                }
-                              },
-                            ),
-                            const SizedBox(width: 10),
-                            RawChip(
-                              label: const Text("Accessibility"),
-                              selected: hasAccessibilityPermission,
-                              onSelected: (_) async {
-                                if (hasAccessibilityPermission) {
-                                  return;
-                                }
-                                clipboardManager.requestAccessibility();
-                              },
-                            ),
-                            const SizedBox(width: 10),
-                            RawChip(
-                              label: const Text("Clipboard"),
-                              selected: hasClipboardPermission,
-                              onSelected: (_) async {
-                                if (hasClipboardPermission) {
-                                  return;
-                                }
-                                await clipboardManager.requestClipboardPermission();
-                                hasClipboardPermission = await clipboardManager.checkClipboardPermission();
-                                setState(() {
-                                });
-                              },
-                            ),
-                          ],
-                        ),
-                      ),
-                      Container(
-                        margin: const EdgeInsets.symmetric(vertical: 5),
-                        child: Text("Options:"),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.only(left: 10, right: 10),
-                        child: IntrinsicHeight(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+        body: SafeArea(
+          child: Builder(builder: (context) {
+            return SingleChildScrollView(
+              scrollDirection: Axis.vertical,
+              child: Column(
+                children: [
+                  const SizedBox(
+                    height: 10,
+                  ),
+                  //region Android
+                  Visibility(
+                    visible: Platform.isAndroid,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Current environment: ${env.name}, Status: $isGranted'),
+                        Padding(
+                          padding: const EdgeInsets.only(left: 10, right: 10),
+                          child: Row(
                             children: [
                               GestureDetector(
-                                onTap: env == EnvironmentType.shizuku
-                                    ? () {
-                                        startListeningOnAndroid(
-                                          context,
-                                          env: EnvironmentType.shizuku,
-                                          way: way,
-                                        );
-                                      }
-                                    : null,
-                                child: Chip(
-                                  label: Text(
-                                    "Start listening by Shizuku",
-                                    style: env == EnvironmentType.shizuku ? null : const TextStyle(color: Colors.grey),
-                                  ),
-                                ),
+                                onTap: () {
+                                  clipboardManager.requestPermission(EnvironmentType.shizuku);
+                                },
+                                child: const Chip(label: Text("Request Shizuka")),
                               ),
-                              GestureDetector(
-                                onTap: env == EnvironmentType.root
-                                    ? () {
-                                        startListeningOnAndroid(
-                                          context,
-                                          env: EnvironmentType.root,
-                                          way: way,
-                                        );
-                                      }
-                                    : null,
-                                child: Chip(
-                                  label: Text(
-                                    "Start listening by Root",
-                                    style: env == EnvironmentType.root ? null : const TextStyle(color: Colors.grey),
-                                  ),
-                                ),
+                              const SizedBox(
+                                width: 10,
                               ),
                               GestureDetector(
                                 onTap: () {
-                                  clipboardManager.stopListening();
-                                  showSnackBarSuc(
-                                    context,
-                                    "Listening stopped",
-                                  );
+                                  clipboardManager.requestPermission(EnvironmentType.root);
                                 },
-                                child: const Chip(label: Text("Stop listening")),
+                                child: const Chip(label: Text("Request Root")),
+                              ),
+                              const SizedBox(
+                                width: 10,
                               ),
                             ],
                           ),
                         ),
-                      ),
-                      Container(
-                        margin: const EdgeInsets.symmetric(vertical: 5),
-                        child: Text("listening way: ${way.name}"),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.only(left: 10, right: 10),
-                        child: Row(
-                          children: [
-                            RawChip(
-                              label: const Text("Hidden API"),
-                              selected: way == ClipboardListeningWay.hiddenApi,
-                              onSelected: (_) async {
-                                setState(() {
-                                  way = ClipboardListeningWay.hiddenApi;
-                                });
-                                await clipboardManager.stopListening();
-                                Future.delayed(const Duration(seconds: 1), () {
-                                  startListeningOnAndroid(
-                                    context,
-                                    env: env,
-                                    way: ClipboardListeningWay.hiddenApi,
-                                  );
-                                });
-                              },
-                            ),
-                            const SizedBox(width: 10),
-                            RawChip(
-                              label: const Text("System Logs"),
-                              selected: way == ClipboardListeningWay.logs,
-                              onSelected: (_) async {
-                                setState(() {
-                                  way = ClipboardListeningWay.logs;
-                                });
-                                await clipboardManager.stopListening();
-                                Future.delayed(const Duration(seconds: 1), () {
-                                  startListeningOnAndroid(
-                                    context,
-                                    env: env,
-                                    way: ClipboardListeningWay.logs,
-                                  );
-                                });
-                              },
-                            ),
-                          ],
+                        const Text('Permissions:'),
+                        Padding(
+                          padding: const EdgeInsets.only(left: 10, right: 10),
+                          child: Wrap(
+                            children: [
+                              RawChip(
+                                label: const Text("Alert Window"),
+                                selected: hasAlertWindowPermission,
+                                onSelected: (_) async {
+                                  if (hasAlertWindowPermission) {
+                                    return;
+                                  }
+                                  final result = await Permission.systemAlertWindow.request();
+                                  print("result isDenied = ${result.isDenied}");
+                                  if (result.isGranted) {
+                                    setState(() {
+                                      hasAlertWindowPermission = result.isGranted;
+                                    });
+                                    showSnackBarSuc(context, "SystemAlertWindow granted");
+                                  } else {
+                                    showSnackBarErr(context, "SystemAlertWindow denied");
+                                  }
+                                },
+                              ),
+                              const SizedBox(width: 10),
+                              RawChip(
+                                label: const Text("Notification"),
+                                selected: hasNotificationPermission,
+                                onSelected: (_) async {
+                                  if (hasNotificationPermission) {
+                                    return;
+                                  }
+                                  final result = await Permission.notification.request();
+                                  if (result.isGranted) {
+                                    setState(() {
+                                      hasNotificationPermission = result.isGranted;
+                                    });
+                                    showSnackBarSuc(context, "Notification granted");
+                                  } else {
+                                    showSnackBarErr(context, "Notification denied");
+                                  }
+                                },
+                              ),
+                              const SizedBox(width: 10),
+                              RawChip(
+                                label: const Text("Accessibility"),
+                                selected: hasAccessibilityPermission,
+                                onSelected: (_) async {
+                                  if (hasAccessibilityPermission) {
+                                    return;
+                                  }
+                                  clipboardManager.requestAccessibility();
+                                },
+                              ),
+                              const SizedBox(width: 10),
+                              RawChip(
+                                label: const Text("Clipboard"),
+                                selected: hasClipboardPermission,
+                                onSelected: (_) async {
+                                  if (hasClipboardPermission) {
+                                    return;
+                                  }
+                                  await clipboardManager.requestClipboardPermission();
+                                  hasClipboardPermission = await clipboardManager.checkClipboardPermission();
+                                  setState(() {});
+                                },
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
+                        Container(
+                          margin: const EdgeInsets.symmetric(vertical: 5),
+                          child: Text("Options:"),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.only(left: 10, right: 10),
+                          child: IntrinsicHeight(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                GestureDetector(
+                                  onTap: env == EnvironmentType.shizuku
+                                      ? () {
+                                          startListeningOnAndroid(
+                                            context,
+                                            env: EnvironmentType.shizuku,
+                                            way: way,
+                                          );
+                                        }
+                                      : null,
+                                  child: Chip(
+                                    label: Text(
+                                      "Start listening by Shizuku",
+                                      style: env == EnvironmentType.shizuku ? null : const TextStyle(color: Colors.grey),
+                                    ),
+                                  ),
+                                ),
+                                GestureDetector(
+                                  onTap: env == EnvironmentType.root
+                                      ? () {
+                                          startListeningOnAndroid(
+                                            context,
+                                            env: EnvironmentType.root,
+                                            way: way,
+                                          );
+                                        }
+                                      : null,
+                                  child: Chip(
+                                    label: Text(
+                                      "Start listening by Root",
+                                      style: env == EnvironmentType.root ? null : const TextStyle(color: Colors.grey),
+                                    ),
+                                  ),
+                                ),
+                                GestureDetector(
+                                  onTap: () {
+                                    clipboardManager.stopListening();
+                                    showSnackBarSuc(
+                                      context,
+                                      "Listening stopped",
+                                    );
+                                  },
+                                  child: const Chip(label: Text("Stop listening")),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        Container(
+                          margin: const EdgeInsets.symmetric(vertical: 5),
+                          child: Text("listening way: ${way.name}"),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.only(left: 10, right: 10),
+                          child: Row(
+                            children: [
+                              RawChip(
+                                label: const Text("Hidden API"),
+                                selected: way == ClipboardListeningWay.hiddenApi,
+                                onSelected: (_) async {
+                                  setState(() {
+                                    way = ClipboardListeningWay.hiddenApi;
+                                  });
+                                  await clipboardManager.stopListening();
+                                  Future.delayed(const Duration(seconds: 1), () {
+                                    startListeningOnAndroid(
+                                      context,
+                                      env: env,
+                                      way: ClipboardListeningWay.hiddenApi,
+                                    );
+                                  });
+                                },
+                              ),
+                              const SizedBox(width: 10),
+                              RawChip(
+                                label: const Text("System Logs"),
+                                selected: way == ClipboardListeningWay.logs,
+                                onSelected: (_) async {
+                                  setState(() {
+                                    way = ClipboardListeningWay.logs;
+                                  });
+                                  await clipboardManager.stopListening();
+                                  Future.delayed(const Duration(seconds: 1), () {
+                                    startListeningOnAndroid(
+                                      context,
+                                      env: env,
+                                      way: ClipboardListeningWay.logs,
+                                    );
+                                  });
+                                },
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                //endregion
+                  //endregion
 
-                //region Linux
-                Visibility(
-                  visible: !Platform.isAndroid,
-                  child: Column(
-                    children: [
-                      GestureDetector(
-                        onTap: () {
-                          clipboardManager.startListening().then((res) {
-                            if (res) {
+                  //region Linux
+                  Visibility(
+                    visible: !Platform.isAndroid,
+                    child: Column(
+                      children: [
+                        GestureDetector(
+                          onTap: () {
+                            clipboardManager.startListening().then((res) {
+                              if (res) {
+                                showSnackBarSuc(
+                                  context,
+                                  "Listening started successfully",
+                                );
+                              } else {
+                                showSnackBarErr(
+                                  context,
+                                  "Listening failed to start",
+                                );
+                              }
+                            });
+                          },
+                          child: const Chip(label: Text("Start listening")),
+                        ),
+                        GestureDetector(
+                          onTap: () {
+                            clipboardManager.stopListening().then((res) {
                               showSnackBarSuc(
                                 context,
-                                "Listening started successfully",
+                                "Listening stopped successfully",
                               );
-                            } else {
+                            }).catchError((err) {
                               showSnackBarErr(
                                 context,
-                                "Listening failed to start",
+                                "Listening failed to stop",
                               );
-                            }
-                          });
-                        },
-                        child: const Chip(label: Text("Start listening")),
-                      ),
-                      GestureDetector(
-                        onTap: () {
-                          clipboardManager.stopListening().then((res) {
-                            showSnackBarSuc(
-                              context,
-                              "Listening stopped successfully",
-                            );
-                          }).catchError((err) {
-                            showSnackBarErr(
-                              context,
-                              "Listening failed to stop",
-                            );
-                          });
-                        },
-                        child: const Chip(label: Text("Stop listening")),
-                      ),
+                            });
+                          },
+                          child: const Chip(label: Text("Stop listening")),
+                        ),
+                      ],
+                    ),
+                  ),
+                  //endregion
+                  //region Windows
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      const Text("ExcludeClipboardContentFromMonitorProcessing:"),
+                      Switch(
+                          value: excludeFormatEnabled,
+                          onChanged: (checked) async {
+                            await clipboardManager.setExcludeFormatEnabled(checked);
+                            setState(() {
+                              excludeFormatEnabled = checked;
+                            });
+                          })
                     ],
                   ),
-                ),
-                //endregion
-                //region Windows
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    const Text("ExcludeClipboardContentFromMonitorProcessing:"),
-                    Switch(
-                        value: excludeFormatEnabled,
-                        onChanged: (checked) async {
-                          await clipboardManager.setExcludeFormatEnabled(checked);
-                          setState(() {
-                            excludeFormatEnabled = checked;
-                          });
-                        })
-                  ],
-                ),
-                //endregion
-                Text('type: $type\n\ncontent:\n$content\n\nsource:${source?.name}\n\n'),
-                const SizedBox(height: 10),
-                if (source?.iconBytes != null)
-                  Image.memory(
-                    source!.iconBytes!,
-                    height: 30,
-                    width: 30,
+                  //endregion
+                  Text('type: $type\n\ncontent:\n$content\n\nsource:${source?.name}\n\n'),
+                  const SizedBox(height: 10),
+                  if (source?.iconBytes != null)
+                    Image.memory(
+                      source!.iconBytes!,
+                      height: 30,
+                      width: 30,
+                    ),
+                  const SizedBox(height: 10),
+                  TextField(controller: controller),
+                  const SizedBox(
+                    height: 10,
                   ),
-                const SizedBox(height: 10),
-                TextField(controller: controller),
-                const SizedBox(
-                  height: 10,
-                ),
-                GestureDetector(
-                  onTap: () {
-                    clipboardManager.copy(ClipboardContentType.text, controller.text);
-                  },
-                  child: const Chip(label: Text("Copy Input Data")),
-                ),
-                GestureDetector(
-                  onTap: () {
-                    clipboardManager.copy(ClipboardContentType.text, Random().nextInt(99999).toString());
-                  },
-                  child: const Chip(label: Text("Copy Random Data")),
-                ),
-                GestureDetector(
-                  onTap: () {
-                    clipboardManager.copy(ClipboardContentType.image, "/Users/admin/Library/Containers/top.coclyun.clipshare.clipshareClipboardListenerExample/Data/tmp/clipboard_20251109_184525_450.png");
-                  },
-                  child: const Chip(label: Text("Copy Test Image(mannal set on code)")),
-                ),
-              ],
-            ),
-          );
-        }),
+                  GestureDetector(
+                    onTap: () {
+                      clipboardManager.copy(ClipboardContentType.text, controller.text);
+                    },
+                    child: const Chip(label: Text("Copy Input Data")),
+                  ),
+                  GestureDetector(
+                    onTap: () {
+                      clipboardManager.copy(ClipboardContentType.text, Random().nextInt(99999).toString());
+                    },
+                    child: const Chip(label: Text("Copy Random Data")),
+                  ),
+                  GestureDetector(
+                    onTap: () {
+                      const filePath = "/storage/emulated/0/DCIM/Camera/20231104_210215.jpg";
+                      clipboardManager.copy(ClipboardContentType.image, filePath);
+                    },
+                    child: const Chip(label: Text("Copy Test Image(mannal set on code)")),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ),
       ),
     );
   }

@@ -1,3 +1,8 @@
+## 1.2.13
+* Android 修复：复制图片后在某些app中无法粘贴的问题
+---
+* Android fix: The problem of not being able to paste copied images in some apps
+
 ## 1.2.12
 * Android 新增：增加特权命令执行方法
 ---

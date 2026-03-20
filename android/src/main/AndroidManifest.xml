@@ -39,10 +39,14 @@
         </service>
         <!--    声明文件处理provider-->
         <provider
-            android:name="top.coclyun.clipshare.clipboard_listener.FileProvider"
+            android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.clipboard_listener.FileProvider"
-            android:exported="true"
-            android:multiprocess="true" />
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
         <!--    声明shizuku provider-->
         <provider
             android:name="rikka.shizuku.ShizukuProvider"

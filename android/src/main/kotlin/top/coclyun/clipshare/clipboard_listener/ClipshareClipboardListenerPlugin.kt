@@ -5,6 +5,7 @@ import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.ActivityManager
 import android.content.ClipData
+import android.content.ClipDescription
 import android.content.ClipboardManager
 import android.content.ComponentName
 import android.content.Context
@@ -18,6 +19,7 @@ import android.provider.Settings
 import android.util.Log
 import android.widget.Toast
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import io.flutter.embedding.android.FlutterFragmentActivity.ACTIVITY_SERVICE
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
@@ -44,6 +46,8 @@ import top.coclyun.clipshare.clipboard_listener.utils.getAppIconAsBase64
 import top.coclyun.clipshare.clipboard_listener.utils.getAppNameByPackageName
 import java.io.DataOutputStream
 import java.io.File
+import java.io.FileInputStream
+import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -332,16 +336,33 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
                 }
 
                 ClipboardContentType.Image -> {
-                    val uri =
-                        Uri.parse("content://${context.packageName}.clipboard_listener.FileProvider/$content")
-                    val clipData =
-                        ClipData.newUri(
-                            context.contentResolver,
+                    if (content == null || !copyImageToPrivateDir(context, content)) {
+                        result.success(false)
+                        return
+                    }
+                    val sourceFile = File(content)
+                    val file = File(context.externalCacheDir, sourceFile.name)
+
+                    val uri = FileProvider.getUriForFile(
+                        context,
+                        context.packageName + ".clipboard_listener.FileProvider",
+                        file
+                    )
+                    val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    val clipData = ClipData(
+                        ClipDescription(
                             "image",
-                            uri
-                        )
-                    // 将数据放入剪贴板
-                    clipboardManager.setPrimaryClip(clipData)
+                            arrayOf("image/jpeg")
+                        ),
+                        ClipData.Item(uri)
+                    )
+                    cm.setPrimaryClip(clipData)
+//                    val clipData =
+//                        ClipData.newUri(
+//                            context.contentResolver,
+//                            "image",
+//                            uri
+//                        )
                 }
             }
             result.success(true)
@@ -349,6 +370,31 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
         } catch (e: Exception) {
             config.ignoreNextCopy = false;
             result.success(false)
+        }
+    }
+
+    fun copyImageToPrivateDir(context: Context, sourcePath: String): Boolean {
+        val sourceFile = File(sourcePath)
+
+        if (!sourceFile.exists()) {
+            Log.e(TAG, "Source file not found")
+            return false
+        }
+
+        val destFile = File(context.externalCacheDir, sourceFile.name)
+
+        try {
+            FileInputStream(sourceFile).use { input ->
+                FileOutputStream(destFile).use { output ->
+                    input.copyTo(output)
+                }
+            }
+
+            Log.d(TAG, "Copied to: ${destFile.absolutePath}")
+            return true
+        } catch (e: Exception) {
+            Log.e(TAG, "Copy failed", e)
+            return false
         }
     }
 
@@ -404,12 +450,12 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
 
     private fun checkClipboardPermission(call: MethodCall, result: Result) {
         //Android 10以前默认有权限
-        if(currentEnv == EnvironmentType.androidPre10){
+        if (currentEnv == EnvironmentType.androidPre10) {
             result.success(true)
             return;
         }
         //无环境，默认失败
-        if(currentEnv == null){
+        if (currentEnv == null) {
             result.success(false)
             return
         }
@@ -437,11 +483,11 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
 
     private fun requestClipboardPermission(call: MethodCall, result: Result) {
         //Android 10以前默认有权限
-        if(currentEnv == EnvironmentType.androidPre10){
+        if (currentEnv == EnvironmentType.androidPre10) {
             result.success(null)
             return;
         }
-        if(currentEnv == null){
+        if (currentEnv == null) {
             result.success(null)
             return
         }
