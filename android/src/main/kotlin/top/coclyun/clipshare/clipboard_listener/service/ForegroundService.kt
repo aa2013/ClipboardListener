@@ -57,7 +57,8 @@ class ForegroundService : Service() {
     private val TAG = "ForegroundService"
     private val listenerZipFileName = "listener.zip"
 
-    private val mainHandler = Handler(Looper.getMainLooper())
+    private val mainHandler = MyHandler(this)
+//    private val mainHandler = Handler(Looper.getMainLooper())
     private var plugin: ClipshareClipboardListenerPlugin? = null
     private lateinit var windowManager: WindowManager
     private lateinit var mainParams: LayoutParams
@@ -81,12 +82,6 @@ class ForegroundService : Service() {
                 plugin!!.config.ignoreNextCopy = false
             } else {
                 mainHandler.sendMessage(Message())
-                Log.d(TAG, "listener onChanged")
-                synchronized(viewLock) {
-                    mainHandler.post{
-                        showFloatFocusView()
-                    }
-                }
             }
         }
 
@@ -97,6 +92,12 @@ class ForegroundService : Service() {
 
         override fun handleMessage(msg: Message) {
             mOuter.get().let {
+                Log.d("listener onChanged", it.toString())
+                it?.let {
+                    synchronized(it.viewLock) {
+                        it.showFloatFocusView()
+                    }
+                }
             }
         }
     }
