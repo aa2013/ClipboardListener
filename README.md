@@ -17,7 +17,7 @@ Shizuku 或 Root）
 |---------|:------------------------------------------|
 | Android | ✔️ 完全支持，Android 10+ 需要依赖 Shizuku / Root权限 |
 | Windows | ✔️ 完全支持                                   |
-| Linux   | ✔️ 完全支持                                   |
+| Linux   | ✔️ 在X11上完全支持，Wayland 中前台时可用               |
 | macOS   | ✔️ 完全支持                                   |
 | IOS     | ✖️ 暂不支持                                   |
 

@@ -5,6 +5,7 @@
 #include "include/clipshare_clipboard_listener/utils.h"
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "include/clipshare_clipboard_listener/stb_image_write.h"
+#include <gio/gio.h>
 
 //获取app名称
 gchar* get_app_name_by_wmclass(Display* display, Window window) {
@@ -19,9 +20,18 @@ gchar* get_app_name_by_wmclass(Display* display, Window window) {
     return NULL;
 }
 
-// 获取应用信息
-gboolean get_foreground_app(gchar** name, gchar** package, gchar** iconB64) {
+// 获取应用信息（wayland）
+static gboolean get_foreground_wayland(gchar** name, gchar** package, gchar** iconB64)
+{
+    *name = NULL;
+    *package = NULL;
+    *iconB64 = NULL;
+    return FALSE;
+}
 
+// 获取应用信息（x11）
+gboolean get_foreground_x11(gchar** name, gchar** package, gchar** iconB64)
+{
     Display* display = XOpenDisplay(nullptr);
     if (!display) {
         debug_printf("can not open X11 Display\n");
@@ -38,7 +48,6 @@ gboolean get_foreground_app(gchar** name, gchar** package, gchar** iconB64) {
     unsigned long nitems;
     unsigned long bytes_after;
     unsigned char* prop = nullptr;
-
     if (XGetWindowProperty(display,
                            DefaultRootWindow(display),
                            active_atom,
@@ -52,14 +61,16 @@ gboolean get_foreground_app(gchar** name, gchar** package, gchar** iconB64) {
         XCloseDisplay(display);
         return FALSE;
     }
-
     Window focused = *(Window*)prop;
+    debug_printf("focused window id: 0x%lx\n", focused);
     XFree(prop);
+    if(!focused){
+        return false;
+    }
 
     // -------------------------
     // 2. 获取窗口 PID
     // -------------------------
-
     Atom pid_atom = XInternAtom(display, "_NET_WM_PID", False);
     unsigned char* pid_prop = nullptr;
 
@@ -67,6 +78,7 @@ gboolean get_foreground_app(gchar** name, gchar** package, gchar** iconB64) {
                            XA_CARDINAL, &type, &format, &nitems,
                            &bytes_after, &pid_prop) != Success) {
         debug_printf("get _NET_WM_PID failed\n");
+        return false;
     }
 
     pid_t window_pid = -1;
@@ -175,4 +187,15 @@ gboolean get_foreground_app(gchar** name, gchar** package, gchar** iconB64) {
     XCloseDisplay(display);
 
     return TRUE;
+}
+
+// 获取应用信息
+gboolean get_foreground_app(gchar** name, gchar** package, gchar** iconB64) {
+    if(!get_foreground_x11(name, package, iconB64)){
+        if(is_wayland()){
+            return get_foreground_wayland(name, package, iconB64);
+        }
+        return false;
+    }
+    return true;
 }

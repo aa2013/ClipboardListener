@@ -12,3 +12,5 @@ void send_ctrl_v(Display* display);
 Window getWindowId();
 
 gboolean activeWindow(Window window, Display** outDisplay);
+
+gboolean is_wayland();

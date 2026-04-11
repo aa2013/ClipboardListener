@@ -103,6 +103,7 @@ void send_ctrl_v(Display* display) {
     XTestFakeKeyEvent(display, ctrl, False, CurrentTime);
     XFlush(display);
 }
+
 Window getWindowId(){
     Display* display = XOpenDisplay(nullptr);
     Atom active_atom = XInternAtom(display, "_NET_ACTIVE_WINDOW", True);
@@ -149,4 +150,13 @@ gboolean activeWindow(Window window, Display** outDisplay){
                &xev);
     XFlush(display);
     return true;
+}
+
+gboolean is_wayland()
+{
+    const char* session = getenv("XDG_SESSION_TYPE");
+    if (session && g_strcmp0(session, "wayland") == 0)
+        return TRUE;
+
+    return getenv("WAYLAND_DISPLAY") != NULL;
 }

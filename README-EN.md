@@ -20,7 +20,7 @@ This project was extracted from [ClipShare](https://github.com/aa2013/ClipShare)
 |----------|:----------------------------------------------------------------------|
 | Android  | ✔️ Fully supported (Android 10+ requires Shizuku or Root permissions) |
 | Windows  | ✔️ Fully supported                                                    |
-| Linux    | ✔️ Fully supported                                                    |
+| Linux    | ✔️ Fully supported on X11                                             |
 | macOS    | ✔️ Fully supported                                                    |
 | iOS      | ✖️ Not supported yet                                                  |
 
