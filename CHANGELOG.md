@@ -1,3 +1,10 @@
+## 1.2.15
+* Windows 修复：某些情况下可能监听不到剪贴板的问题
+* Linux 修复：在Wayland下崩溃的问题
+---
+* Windows fix: An issue where clipboard content is sometimes not detected.
+* Linux fix: Crash on wayland
+
 ## 1.2.14
 * Android 优化：移除 FileProvider
 ---
