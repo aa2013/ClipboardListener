@@ -87,6 +87,10 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
     var latestWriteClipboardPkgService: ILatestWriteClipboardPkgService? = null
     val latestWriteClipboardPkgShellFileName = "readLastWriteClipboardPkg.sh"
     private var commandRunnerService: ICommandRunnerService? = null
+    private var commandRunnerServiceArgs: UserServiceArgs? = null
+    private var commandRunnerServiceConn: ServiceConnection? = null
+    @Volatile
+    private var commandRunnerBinding = false
     private val commandRunnerScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val clipboardSourceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
@@ -118,6 +122,7 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+        destroyCommandRunnerService()
         channel.setMethodCallHandler(null)
         instance = null
         Shizuku.removeRequestPermissionResultListener(this);
@@ -528,49 +533,74 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
 
     @Synchronized
     private fun initCommandRunnerService() {
-        if (commandRunnerService != null) {
+        if (commandRunnerService != null || commandRunnerBinding) {
             return
         }
         if (currentEnv == EnvironmentType.root && commandRunnerService == null) {
             commandRunnerService = CommandRunnerService()
             return
         }
-        val serviceArgs = UserServiceArgs(
-            ComponentName(
-                config.applicationId,
-                CommandRunnerService::class.java.name
-            )
-        ).daemon(false).processNameSuffix("clipshare-command-service")
-        val serviceConn = object : ServiceConnection {
-            override fun onServiceConnected(name: ComponentName, binder: IBinder) {
-                Log.d(TAG, "onServiceConnected ${name.className}")
-                try {
-                    commandRunnerService = ICommandRunnerService.Stub.asInterface(binder)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
-            }
-
-            override fun onServiceDisconnected(name: ComponentName) {
-                try {
-                    commandRunnerService?.destroy()
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                } finally {
-                    commandRunnerService = null;
-                }
-                Log.w(TAG, "onServiceDisconnected ${name.className}")
-            }
-
+        if (commandRunnerServiceArgs == null) {
+            commandRunnerServiceArgs = UserServiceArgs(
+                ComponentName(
+                    config.applicationId,
+                    CommandRunnerService::class.java.name
+                )
+            ).daemon(false).processNameSuffix("clipshare-command-service")
         }
-        Shizuku.bindUserService(serviceArgs, serviceConn)
+        if (commandRunnerServiceConn == null) {
+            commandRunnerServiceConn = object : ServiceConnection {
+                override fun onServiceConnected(name: ComponentName, binder: IBinder) {
+                    Log.d(TAG, "onServiceConnected ${name.className}")
+                    commandRunnerBinding = false
+                    try {
+                        commandRunnerService = ICommandRunnerService.Stub.asInterface(binder)
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+
+                override fun onServiceDisconnected(name: ComponentName) {
+                    commandRunnerBinding = false
+                    try {
+                        commandRunnerService?.destroy()
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    } finally {
+                        commandRunnerService = null
+                    }
+                    Log.w(TAG, "onServiceDisconnected ${name.className}")
+                }
+            }
+        }
+        commandRunnerBinding = true
+        Shizuku.bindUserService(commandRunnerServiceArgs!!, commandRunnerServiceConn!!)
     }
 
     suspend fun waitCommandRunnerService(timeout: Long = 5000) {
         withTimeout(timeout) {
-            while (commandRunnerService == null) {
+            while (commandRunnerService == null && commandRunnerBinding) {
                 delay(50)
             }
+        }
+    }
+
+    @Synchronized
+    private fun destroyCommandRunnerService() {
+        try {
+            commandRunnerService?.destroy()
+            if (commandRunnerServiceArgs != null && commandRunnerServiceConn != null) {
+                Shizuku.unbindUserService(
+                    commandRunnerServiceArgs!!,
+                    commandRunnerServiceConn!!,
+                    true
+                )
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        } finally {
+            commandRunnerService = null
+            commandRunnerBinding = false
         }
     }
 
@@ -771,9 +801,9 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
         try {
             latestWriteClipboardPkgService?.destroy()
             latestWriteClipboardPkgService = null
-            if (listeningServiceArgs != null && clipboardSourceServiceConn != null) {
+            if (clipboardSourceArgs != null && clipboardSourceServiceConn != null) {
                 Shizuku.unbindUserService(
-                    listeningServiceArgs!!,
+                    clipboardSourceArgs!!,
                     clipboardSourceServiceConn!!,
                     true
                 )

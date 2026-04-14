@@ -8,9 +8,13 @@ import java.io.InputStreamReader
 
 class CommandRunnerService : ICommandRunnerService.Stub() {
     private val TAG = "CommandRunnerService"
+    private var isRootMode: Boolean = false;
 
     override fun destroy() {
         Log.i(TAG, "destroy")
+        if(!isRootMode) {
+            System.exit(0)
+        }
     }
 
     override fun exit() {
@@ -20,7 +24,7 @@ class CommandRunnerService : ICommandRunnerService.Stub() {
     override fun run(command: String, useRoot: Boolean): String {
         var process: Process? = null
         val result = StringBuilder()
-
+        isRootMode = useRoot
         try {
             process = if (useRoot) {
                 ProcessBuilder("su")
