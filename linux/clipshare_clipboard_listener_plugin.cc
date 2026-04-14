@@ -333,36 +333,47 @@ static FlMethodResponse *copyData(ClipshareClipboardListenerPlugin *self, const 
     GdkDisplay *display = gdk_display_get_default();
     clipboard = gtk_clipboard_get_for_display(display, GDK_SELECTION_CLIPBOARD);
   }
-  self->ignoreNextCopy = true;
   if (strcmp(type, "text") == 0)
   {
-    // 将文本设置到剪贴板
-    gtk_clipboard_set_text(clipboard, content, -1);
-    // 保持剪贴板内容
-    gtk_clipboard_store(clipboard);
-    success = true;
+    if (ensureWaylandClipboardListener(self) &&
+        wayland_clipboard_listener_set_text(self->wayland_listener, content)) {
+      success = true;
+    } else {
+      self->ignoreNextCopy = true;
+      // 将文本设置到剪贴板
+      gtk_clipboard_set_text(clipboard, content, -1);
+      // 保持剪贴板内容
+      gtk_clipboard_store(clipboard);
+      success = true;
+    }
   }
   else if (strcmp(type, "image") == 0)
   {
-
-    // 从文件路径加载图片为 GdkPixbuf
-    GError *error = NULL;
-    GdkPixbuf *pixbuf = gdk_pixbuf_new_from_file(content, &error);
-
-    if (pixbuf == NULL)
-    {
-      debug_printf("Failed to load image: %s\n", error->message);
-      g_error_free(error);
-    }
-    else
-    {
-      // 将图片设置到剪贴板
-      gtk_clipboard_set_image(clipboard, pixbuf);
-      // 保持剪贴板内容
-      gtk_clipboard_store(clipboard);
-      // 释放 GdkPixbuf
-      g_object_unref(pixbuf);
+    if (ensureWaylandClipboardListener(self) &&
+        wayland_clipboard_listener_set_image(self->wayland_listener, content)) {
       success = true;
+    } else {
+      self->ignoreNextCopy = true;
+
+      // 从文件路径加载图片为 GdkPixbuf
+      GError *error = NULL;
+      GdkPixbuf *pixbuf = gdk_pixbuf_new_from_file(content, &error);
+
+      if (pixbuf == NULL)
+      {
+        debug_printf("Failed to load image: %s\n", error->message);
+        g_error_free(error);
+      }
+      else
+      {
+        // 将图片设置到剪贴板
+        gtk_clipboard_set_image(clipboard, pixbuf);
+        // 保持剪贴板内容
+        gtk_clipboard_store(clipboard);
+        // 释放 GdkPixbuf
+        g_object_unref(pixbuf);
+        success = true;
+      }
     }
   }
   g_autoptr(FlValue) result = fl_value_new_bool(success);

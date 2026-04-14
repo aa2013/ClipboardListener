@@ -21,6 +21,14 @@ void wayland_clipboard_listener_free(WaylandClipboardListener *listener);
 gboolean wayland_clipboard_listener_is_available(
     WaylandClipboardListener *listener);
 
+gboolean wayland_clipboard_listener_set_text(
+    WaylandClipboardListener *listener,
+    const gchar *text);
+
+gboolean wayland_clipboard_listener_set_image(
+    WaylandClipboardListener *listener,
+    const gchar *path);
+
 G_END_DECLS
 
 #endif  // CLIPSHARE_WAYLAND_CLIPBOARD_LISTENER_H_

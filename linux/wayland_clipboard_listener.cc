@@ -5,6 +5,7 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <gdk-pixbuf/gdk-pixbuf.h>
 #include <poll.h>
 #include <string.h>
 #include <unistd.h>
@@ -20,8 +21,11 @@ struct _WaylandClipboardListener {
   ext_data_control_manager_v1 *manager;
   ext_data_control_device_v1 *device;
   GThread *thread;
+  GAsyncQueue *commands;
+  GPtrArray *owned_sources;
+  int command_fds[2];
   gint should_stop;
-  gboolean skip_next_selection;
+  guint skip_selection_count;
   gint64 ignore_events_until_us;
 };
 
@@ -46,6 +50,95 @@ struct ClipboardChangedEvent {
   gchar *type;
   gchar *content;
 };
+
+struct ClipboardSource {
+  WaylandClipboardListener *listener;
+  ext_data_control_source_v1 *source;
+  GBytes *bytes;
+  GPtrArray *mime_types;
+};
+
+struct SetSelectionCommand {
+  GBytes *bytes;
+  GPtrArray *mime_types;
+};
+
+void clipboard_source_free(gpointer data) {
+  auto *source = static_cast<ClipboardSource *>(data);
+  if (!source) {
+    return;
+  }
+  if (source->source) {
+    ext_data_control_source_v1_destroy(source->source);
+  }
+  if (source->bytes) {
+    g_bytes_unref(source->bytes);
+  }
+  if (source->mime_types) {
+    g_ptr_array_unref(source->mime_types);
+  }
+  g_free(source);
+}
+
+void set_selection_command_free(SetSelectionCommand *command) {
+  if (!command) {
+    return;
+  }
+  if (command->bytes) {
+    g_bytes_unref(command->bytes);
+  }
+  if (command->mime_types) {
+    g_ptr_array_unref(command->mime_types);
+  }
+  g_free(command);
+}
+
+GPtrArray *new_mime_type_array() {
+  return g_ptr_array_new_with_free_func(g_free);
+}
+
+void add_mime_type(GPtrArray *mime_types, const gchar *mime_type) {
+  g_ptr_array_add(mime_types, g_strdup(mime_type));
+}
+
+SetSelectionCommand *set_selection_command_new(GBytes *bytes,
+                                               GPtrArray *mime_types) {
+  auto *command = g_new0(SetSelectionCommand, 1);
+  command->bytes = static_cast<GBytes *>(g_bytes_ref(bytes));
+  command->mime_types = g_ptr_array_ref(mime_types);
+  return command;
+}
+
+gboolean mime_types_contains(GPtrArray *mime_types, const gchar *mime_type) {
+  if (!mime_types || !mime_type) {
+    return FALSE;
+  }
+  for (guint i = 0; i < mime_types->len; ++i) {
+    if (g_strcmp0(static_cast<const gchar *>(g_ptr_array_index(mime_types, i)),
+                  mime_type) == 0) {
+      return TRUE;
+    }
+  }
+  return FALSE;
+}
+
+gboolean write_all(int fd, const guint8 *data, gsize length) {
+  gsize written = 0;
+  while (written < length) {
+    ssize_t ret = write(fd, data + written, length - written);
+    if (ret > 0) {
+      written += static_cast<gsize>(ret);
+      continue;
+    }
+    if (ret < 0 && errno == EINTR) {
+      continue;
+    }
+    debug_printf("Wayland clipboard source write failed: %s",
+                 ret < 0 ? g_strerror(errno) : "zero bytes written");
+    return FALSE;
+  }
+  return TRUE;
+}
 
 gboolean deliver_clipboard_changed(gpointer user_data) {
   auto *event = static_cast<ClipboardChangedEvent *>(user_data);
@@ -90,6 +183,45 @@ void clipboard_offer_free(ClipboardOffer *offer) {
   g_free(offer);
 }
 
+void clipboard_source_send(void *data,
+                           ext_data_control_source_v1 * /* source */,
+                           const char *mime_type,
+                           int32_t fd) {
+  auto *source = static_cast<ClipboardSource *>(data);
+  if (!source || !source->bytes ||
+      !mime_types_contains(source->mime_types, mime_type)) {
+    close(fd);
+    return;
+  }
+
+  gsize length = 0;
+  const guint8 *bytes =
+      static_cast<const guint8 *>(g_bytes_get_data(source->bytes, &length));
+  if (bytes && length > 0) {
+    write_all(fd, bytes, length);
+  }
+  close(fd);
+}
+
+void clipboard_source_cancelled(void *data,
+                                ext_data_control_source_v1 * /* source */) {
+  auto *source = static_cast<ClipboardSource *>(data);
+  if (!source) {
+    return;
+  }
+  if (source->listener && source->listener->owned_sources) {
+    if (g_ptr_array_remove(source->listener->owned_sources, source)) {
+      return;
+    }
+  }
+  clipboard_source_free(source);
+}
+
+const ext_data_control_source_v1_listener kSourceListener = {
+    clipboard_source_send,
+    clipboard_source_cancelled,
+};
+
 const gchar *find_mime_type(ClipboardOffer *offer,
                             const gchar *const *candidates) {
   if (!offer || !offer->mime_types) {
@@ -105,6 +237,95 @@ const gchar *find_mime_type(ClipboardOffer *offer,
     }
   }
   return nullptr;
+}
+
+void wake_command_pipe(WaylandClipboardListener *listener) {
+  if (!listener || listener->command_fds[1] < 0) {
+    return;
+  }
+
+  char byte = 1;
+  while (write(listener->command_fds[1], &byte, 1) < 0) {
+    if (errno == EINTR) {
+      continue;
+    }
+    if (errno != EAGAIN && errno != EWOULDBLOCK) {
+      debug_printf("Wayland clipboard command wake failed: %s",
+                   g_strerror(errno));
+    }
+    return;
+  }
+}
+
+void drain_command_pipe(WaylandClipboardListener *listener) {
+  if (!listener || listener->command_fds[0] < 0) {
+    return;
+  }
+
+  char buffer[64];
+  while (read(listener->command_fds[0], buffer, sizeof(buffer)) > 0) {
+  }
+}
+
+gboolean enqueue_set_selection_command(WaylandClipboardListener *listener,
+                                       SetSelectionCommand *command) {
+  if (!wayland_clipboard_listener_is_available(listener) ||
+      !listener->commands || !command) {
+    set_selection_command_free(command);
+    return FALSE;
+  }
+
+  g_async_queue_push(listener->commands, command);
+  wake_command_pipe(listener);
+  return TRUE;
+}
+
+void apply_set_selection_command(WaylandClipboardListener *listener,
+                                 SetSelectionCommand *command) {
+  if (!wayland_clipboard_listener_is_available(listener) || !command ||
+      !command->bytes || !command->mime_types || command->mime_types->len == 0) {
+    return;
+  }
+
+  auto *source = g_new0(ClipboardSource, 1);
+  source->listener = listener;
+  source->source =
+      ext_data_control_manager_v1_create_data_source(listener->manager);
+  if (!source->source) {
+    clipboard_source_free(source);
+    debug_printf("Wayland data-control can not create clipboard source");
+    return;
+  }
+
+  source->bytes = static_cast<GBytes *>(g_bytes_ref(command->bytes));
+  source->mime_types = g_ptr_array_ref(command->mime_types);
+  ext_data_control_source_v1_add_listener(source->source, &kSourceListener,
+                                          source);
+  for (guint i = 0; i < source->mime_types->len; ++i) {
+    ext_data_control_source_v1_offer(
+        source->source,
+        static_cast<const gchar *>(g_ptr_array_index(source->mime_types, i)));
+  }
+
+  g_ptr_array_add(listener->owned_sources, source);
+  listener->skip_selection_count++;
+  ext_data_control_device_v1_set_selection(listener->device, source->source);
+}
+
+void process_pending_commands(WaylandClipboardListener *listener) {
+  if (!listener || !listener->commands) {
+    return;
+  }
+
+  while (true) {
+    auto *command = static_cast<SetSelectionCommand *>(
+        g_async_queue_try_pop(listener->commands));
+    if (!command) {
+      return;
+    }
+    apply_set_selection_command(listener, command);
+    set_selection_command_free(command);
+  }
 }
 
 gboolean flush_wayland_display(wl_display *display) {
@@ -348,15 +569,18 @@ void device_data_offer(void *data,
 void device_selection(void *data,
                       ext_data_control_device_v1 * /* device */,
                       ext_data_control_offer_v1 *id) {
+  auto *listener = static_cast<WaylandClipboardListener *>(data);
   if (!id) {
+    if (listener && listener->skip_selection_count > 0) {
+      listener->skip_selection_count--;
+    }
     return;
   }
-  auto *listener = static_cast<WaylandClipboardListener *>(data);
   auto *offer = static_cast<ClipboardOffer *>(
       ext_data_control_offer_v1_get_user_data(id));
   if (listener) {
-    if (listener->skip_next_selection) {
-      listener->skip_next_selection = FALSE;
+    if (listener->skip_selection_count > 0) {
+      listener->skip_selection_count--;
       clipboard_offer_free(offer);
       return;
     }
@@ -421,6 +645,8 @@ const wl_registry_listener kRegistryListener = {
 gpointer wayland_dispatch_thread(gpointer user_data) {
   auto *listener = static_cast<WaylandClipboardListener *>(user_data);
   while (!g_atomic_int_get(&listener->should_stop)) {
+    process_pending_commands(listener);
+
     while (wl_display_prepare_read(listener->display) != 0) {
       if (wl_display_dispatch_pending(listener->display) < 0) {
         debug_printf("Wayland dispatch pending failed");
@@ -435,8 +661,12 @@ gpointer wayland_dispatch_thread(gpointer user_data) {
       break;
     }
 
-    pollfd pfd = {wl_display_get_fd(listener->display), POLLIN, 0};
-    int ret = poll(&pfd, 1, kWaylandPollTimeoutMs);
+    pollfd pfds[2] = {
+        {wl_display_get_fd(listener->display), POLLIN, 0},
+        {listener->command_fds[0], POLLIN, 0},
+    };
+    nfds_t fd_count = listener->command_fds[0] >= 0 ? 2 : 1;
+    int ret = poll(pfds, fd_count, kWaylandPollTimeoutMs);
     if (g_atomic_int_get(&listener->should_stop)) {
       wl_display_cancel_read(listener->display);
       break;
@@ -453,7 +683,10 @@ gpointer wayland_dispatch_thread(gpointer user_data) {
       wl_display_cancel_read(listener->display);
       continue;
     }
-    if (pfd.revents & POLLIN) {
+    gboolean display_has_data = pfds[0].revents & POLLIN;
+    gboolean command_has_data =
+        fd_count > 1 && (pfds[1].revents & (POLLIN | POLLERR | POLLHUP));
+    if (display_has_data) {
       if (wl_display_read_events(listener->display) < 0) {
         debug_printf("Wayland display read events failed");
         break;
@@ -464,10 +697,14 @@ gpointer wayland_dispatch_thread(gpointer user_data) {
       }
     } else {
       wl_display_cancel_read(listener->display);
-      if (pfd.revents & (POLLERR | POLLHUP | POLLNVAL)) {
+      if (pfds[0].revents & (POLLERR | POLLHUP | POLLNVAL)) {
         debug_printf("Wayland display poll returned an error");
         break;
       }
+    }
+    if (command_has_data) {
+      drain_command_pipe(listener);
+      process_pending_commands(listener);
     }
   }
   g_atomic_int_set(&listener->should_stop, TRUE);
@@ -484,9 +721,28 @@ WaylandClipboardListener *wayland_clipboard_listener_new(
   }
 
   auto *listener = g_new0(WaylandClipboardListener, 1);
+  listener->command_fds[0] = -1;
+  listener->command_fds[1] = -1;
   listener->owner = owner;
   listener->callback = callback;
   listener->main_context = g_main_context_ref(g_main_context_default());
+  listener->commands = g_async_queue_new();
+  listener->owned_sources =
+      g_ptr_array_new_with_free_func(clipboard_source_free);
+  if (pipe(listener->command_fds) != 0) {
+    debug_printf("Can not create Wayland command pipe: %s", g_strerror(errno));
+    wayland_clipboard_listener_free(listener);
+    return nullptr;
+  }
+  int flags = fcntl(listener->command_fds[0], F_GETFL, 0);
+  if (flags >= 0) {
+    fcntl(listener->command_fds[0], F_SETFL, flags | O_NONBLOCK);
+  }
+  flags = fcntl(listener->command_fds[1], F_GETFL, 0);
+  if (flags >= 0) {
+    fcntl(listener->command_fds[1], F_SETFL, flags | O_NONBLOCK);
+  }
+
   listener->display = wl_display_connect(nullptr);
   if (!listener->display) {
     debug_printf("Can not connect to Wayland display");
@@ -511,7 +767,7 @@ WaylandClipboardListener *wayland_clipboard_listener_new(
   listener->device =
       ext_data_control_manager_v1_get_data_device(listener->manager,
                                                   listener->seat);
-  listener->skip_next_selection = TRUE;
+  listener->skip_selection_count = 1;
   listener->ignore_events_until_us =
       g_get_monotonic_time() + kInitialSelectionSilenceMs * G_TIME_SPAN_MILLISECOND;
   ext_data_control_device_v1_add_listener(listener->device, &kDeviceListener,
@@ -535,8 +791,29 @@ void wayland_clipboard_listener_free(WaylandClipboardListener *listener) {
   }
 
   g_atomic_int_set(&listener->should_stop, TRUE);
+  wake_command_pipe(listener);
   if (listener->thread) {
     g_thread_join(listener->thread);
+  }
+  if (listener->commands) {
+    while (true) {
+      auto *command = static_cast<SetSelectionCommand *>(
+          g_async_queue_try_pop(listener->commands));
+      if (!command) {
+        break;
+      }
+      set_selection_command_free(command);
+    }
+    g_async_queue_unref(listener->commands);
+  }
+  if (listener->owned_sources) {
+    g_ptr_array_unref(listener->owned_sources);
+  }
+  if (listener->command_fds[0] >= 0) {
+    close(listener->command_fds[0]);
+  }
+  if (listener->command_fds[1] >= 0) {
+    close(listener->command_fds[1]);
   }
   if (listener->device) {
     ext_data_control_device_v1_destroy(listener->device);
@@ -563,4 +840,68 @@ gboolean wayland_clipboard_listener_is_available(
     WaylandClipboardListener *listener) {
   return listener && listener->display && listener->manager &&
          listener->seat && listener->device;
+}
+
+gboolean wayland_clipboard_listener_set_text(
+    WaylandClipboardListener *listener,
+    const gchar *text) {
+  if (!wayland_clipboard_listener_is_available(listener)) {
+    return FALSE;
+  }
+
+  const gchar *safe_text = text ? text : "";
+  g_autoptr(GBytes) bytes = g_bytes_new(safe_text, strlen(safe_text));
+  g_autoptr(GPtrArray) mime_types = new_mime_type_array();
+  add_mime_type(mime_types, "text/plain;charset=utf-8");
+  add_mime_type(mime_types, "text/plain");
+
+  return enqueue_set_selection_command(
+      listener, set_selection_command_new(bytes, mime_types));
+}
+
+gboolean wayland_clipboard_listener_set_image(
+    WaylandClipboardListener *listener,
+    const gchar *path) {
+  if (!wayland_clipboard_listener_is_available(listener) || !path) {
+    return FALSE;
+  }
+
+  GError *error = nullptr;
+  GdkPixbuf *pixbuf = gdk_pixbuf_new_from_file(path, &error);
+  if (!pixbuf) {
+    debug_printf("Failed to load Wayland clipboard image: %s",
+                 error ? error->message : "unknown error");
+    if (error) {
+      g_error_free(error);
+    }
+    return FALSE;
+  }
+
+  gchar *buffer = nullptr;
+  gsize buffer_size = 0;
+  gboolean saved =
+      gdk_pixbuf_save_to_buffer(pixbuf, &buffer, &buffer_size, "png", &error,
+                                NULL);
+  g_object_unref(pixbuf);
+  if (!saved) {
+    debug_printf("Failed to encode Wayland clipboard image: %s",
+                 error ? error->message : "unknown error");
+    if (error) {
+      g_error_free(error);
+    }
+    return FALSE;
+  }
+
+  if (buffer_size > kMaxClipboardBytes) {
+    debug_printf("Wayland clipboard image is too large");
+    g_free(buffer);
+    return FALSE;
+  }
+
+  g_autoptr(GBytes) bytes = g_bytes_new_take(buffer, buffer_size);
+  g_autoptr(GPtrArray) mime_types = new_mime_type_array();
+  add_mime_type(mime_types, "image/png");
+
+  return enqueue_set_selection_command(
+      listener, set_selection_command_new(bytes, mime_types));
 }
