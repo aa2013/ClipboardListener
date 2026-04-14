@@ -342,6 +342,19 @@ class ForegroundService : Service() {
         } catch (_: Exception) {
 
         }
+        try {
+            plugin?.listeningServiceArgs?.let { args ->
+                plugin?.listeningServiceConn?.let { conn ->
+                    Shizuku.unbindUserService(args, conn, true)
+                }
+            }
+            plugin?.listeningServiceConn = null
+        } catch (e: Exception) {
+            Log.w(TAG, "unbind listening service failed", e)
+        }
+        Shizuku.removeBinderReceivedListener(onBinderReceivedListener)
+        Shizuku.removeBinderDeadListener(onBinderDeadListener)
+        stopForeground(STOP_FOREGROUND_REMOVE)
         listenerService = null
         super.onDestroy()
     }

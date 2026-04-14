@@ -131,14 +131,22 @@ open class ClipboardListenerService : IClipboardListenerService.Stub() {
     override fun stopListening() {
         Log.d(TAG, "stopListening")
         stopped = true
-        process?.inputStream?.close()
-        process?.outputStream?.close()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            process?.destroyForcibly()
-        } else {
-            process?.destroy()
+        stopProcess()
+    }
+
+    private fun stopProcess(){
+        try{
+            process?.inputStream?.close()
+            process?.outputStream?.close()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                process?.destroyForcibly()
+            } else {
+                process?.destroy()
+            }
+            process = null
+        }catch (_: Exception){
+
         }
-        process = null
     }
 
     /**
@@ -146,6 +154,7 @@ open class ClipboardListenerService : IClipboardListenerService.Stub() {
      */
     override fun destroy() {
         Log.i(TAG, "destroy")
+        stopProcess()
         if(!isRootMode) {
             System.exit(0)
         }
