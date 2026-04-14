@@ -5,17 +5,57 @@ cmake_minimum_required(VERSION 3.10)
 
 # Project-level configuration.
 set(PROJECT_NAME "clipshare_clipboard_listener")
-project(${PROJECT_NAME} LANGUAGES CXX)
+project(${PROJECT_NAME} LANGUAGES C CXX)
 
 # This value is used when generating builds using this plugin, so it must
 # not be changed.
 set(PLUGIN_NAME "clipshare_clipboard_listener_plugin")
 
+find_program(WAYLAND_SCANNER_EXECUTABLE NAMES wayland-scanner)
+if(NOT WAYLAND_SCANNER_EXECUTABLE)
+  message(FATAL_ERROR "wayland-scanner is required to build the Linux clipboard listener")
+endif()
+
+pkg_check_modules(WAYLAND_CLIENT REQUIRED IMPORTED_TARGET wayland-client)
+pkg_check_modules(WAYLAND_PROTOCOLS REQUIRED wayland-protocols)
+pkg_get_variable(WAYLAND_PROTOCOLS_DIR wayland-protocols pkgdatadir)
+set(EXT_DATA_CONTROL_PROTOCOL
+  "${WAYLAND_PROTOCOLS_DIR}/staging/ext-data-control/ext-data-control-v1.xml")
+if(NOT EXISTS "${EXT_DATA_CONTROL_PROTOCOL}")
+  message(FATAL_ERROR "ext-data-control-v1.xml was not found in wayland-protocols")
+endif()
+
+set(GENERATED_PROTOCOL_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
+set(GENERATED_EXT_DATA_CONTROL_PROTOCOL_HEADER
+  "${GENERATED_PROTOCOL_DIR}/ext-data-control-v1-client-protocol.h")
+set(GENERATED_EXT_DATA_CONTROL_PROTOCOL_CODE
+  "${GENERATED_PROTOCOL_DIR}/ext-data-control-v1-protocol.c")
+add_custom_command(
+  OUTPUT
+    "${GENERATED_EXT_DATA_CONTROL_PROTOCOL_HEADER}"
+    "${GENERATED_EXT_DATA_CONTROL_PROTOCOL_CODE}"
+  COMMAND ${CMAKE_COMMAND} -E make_directory "${GENERATED_PROTOCOL_DIR}"
+  COMMAND "${WAYLAND_SCANNER_EXECUTABLE}" client-header
+    "${EXT_DATA_CONTROL_PROTOCOL}"
+    "${GENERATED_EXT_DATA_CONTROL_PROTOCOL_HEADER}"
+  COMMAND "${WAYLAND_SCANNER_EXECUTABLE}" private-code
+    "${EXT_DATA_CONTROL_PROTOCOL}"
+    "${GENERATED_EXT_DATA_CONTROL_PROTOCOL_CODE}"
+  DEPENDS "${EXT_DATA_CONTROL_PROTOCOL}"
+  VERBATIM
+)
+set_source_files_properties(
+  "${GENERATED_EXT_DATA_CONTROL_PROTOCOL_CODE}"
+  PROPERTIES COMPILE_FLAGS "-Wno-unused-const-variable"
+)
+
 # Any new source files that you add to the plugin should be added here.
 list(APPEND PLUGIN_SOURCES
   "clipshare_clipboard_listener_plugin.cc"
+  "wayland_clipboard_listener.cc"
   "utils.cc"
   "foreground_app_info.cc"
+  "${GENERATED_EXT_DATA_CONTROL_PROTOCOL_CODE}"
 )
 
 # Define the plugin library target. Its name must not be changed (see comment
@@ -40,8 +80,11 @@ target_compile_definitions(${PLUGIN_NAME} PRIVATE FLUTTER_PLUGIN_IMPL)
 # dependencies here.
 target_include_directories(${PLUGIN_NAME} INTERFACE
   "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_include_directories(${PLUGIN_NAME} PRIVATE
+  "${GENERATED_PROTOCOL_DIR}")
 target_link_libraries(${PLUGIN_NAME} PRIVATE flutter)
 target_link_libraries(${PLUGIN_NAME} PRIVATE PkgConfig::GTK)
+target_link_libraries(${PLUGIN_NAME} PRIVATE PkgConfig::WAYLAND_CLIENT)
 # 查找 X11 和 Xtst
 find_package(X11 REQUIRED)
 find_library(XTEST_LIB Xtst REQUIRED)
