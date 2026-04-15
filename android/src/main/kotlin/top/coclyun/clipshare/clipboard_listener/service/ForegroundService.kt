@@ -199,6 +199,11 @@ class ForegroundService : Service() {
         listenerService = null
         useRoot = intent?.getBooleanExtra("useRoot", false) ?: false
         plugin = ClipshareClipboardListenerPlugin.instance
+        if (plugin == null) {
+            Log.e(TAG, "plugin not initialized")
+            stopSelf()
+            return START_NOT_STICKY
+        }
         Shizuku.addBinderReceivedListenerSticky(onBinderReceivedListener)
         Shizuku.addBinderDeadListener(onBinderDeadListener)
         createNotify()
@@ -241,7 +246,11 @@ class ForegroundService : Service() {
                 //https://github.com/RikkaApps/Shizuku/issues/451
                 override fun onServiceConnected(componentName: ComponentName, binder: IBinder) {
                     if (service != null) {
-                        service?.stopListening()
+                        try {
+                            service?.stopListening()
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
                         return
                     }
                     Log.d(TAG, "onServiceConnected ${componentName.className}")
@@ -263,8 +272,13 @@ class ForegroundService : Service() {
                 }
 
                 override fun onServiceDisconnected(componentName: ComponentName) {
-                    listenerService?.stopListening()
-                    listenerService = null
+                    try {
+                        listenerService?.stopListening()
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    } finally {
+                        listenerService = null
+                    }
                     notifyForeground(
                         plugin!!.config.shizukuDisconnectedTitle,
                         plugin!!.config.shizukuDisconnectedText
