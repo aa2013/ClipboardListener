@@ -144,8 +144,8 @@ open class ClipboardListenerService : IClipboardListenerService.Stub() {
                 process?.destroy()
             }
             process = null
-        }catch (_: Exception){
-
+        } catch (e: Exception){
+            e.printStackTrace()
         }
     }
 
