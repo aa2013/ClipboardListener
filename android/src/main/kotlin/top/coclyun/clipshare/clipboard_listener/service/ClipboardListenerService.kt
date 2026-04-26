@@ -17,6 +17,7 @@ import java.util.Locale
 open class ClipboardListenerService : IClipboardListenerService.Stub() {
     private val TAG = "ClipboardListenerService"
     private var process: Process? = null
+    private var processStdin: DataOutputStream? = null
     private var stopped: Boolean = false
     private var isRootMode: Boolean = false;
     private fun buildCommandsWithSpace(commands: Array<String>): String {
@@ -37,6 +38,7 @@ open class ClipboardListenerService : IClipboardListenerService.Stub() {
         filePath: String,
         useHiddenApi: Boolean
     ) {
+        stopped = false
         isRootMode = useRoot
         var success = false;
         if (useHiddenApi) {
@@ -90,17 +92,22 @@ open class ClipboardListenerService : IClipboardListenerService.Stub() {
                 processBuilder = ProcessBuilder(arrayOf("su").toList())
                 processBuilder.redirectErrorStream(true)
                 process = processBuilder.start()
-                val os = DataOutputStream(process!!.outputStream)
-                os.writeBytes("${buildCommandsWithSpace(commands)}\n")
-                os.flush()
+                processStdin = DataOutputStream(process!!.outputStream)
+                processStdin?.writeBytes("exec ${buildCommandsWithSpace(commands)}\n")
+                processStdin?.flush()
             } else {
                 processBuilder = ProcessBuilder(commands.toList())
                 processBuilder.redirectErrorStream(true)
                 process = processBuilder.start()
+                processStdin = null
             }
             reader = BufferedReader(InputStreamReader(process!!.inputStream))
             var line: String?
             while (reader.readLine().also { line = it } != null) {
+                if (stopped || Thread.currentThread().isInterrupted) {
+                    Log.d(TAG, "stop requested, break read loop")
+                    break
+                }
                 Log.d(TAG, line!!)
                 if (useLog) {
                     callback.onChanged(line!!)
@@ -124,6 +131,7 @@ open class ClipboardListenerService : IClipboardListenerService.Stub() {
             error = true;
         } finally {
             reader?.close()
+            processStdin = null
         }
         return error
     }
@@ -136,6 +144,13 @@ open class ClipboardListenerService : IClipboardListenerService.Stub() {
 
     private fun stopProcess(){
         try{
+            processStdin?.writeBytes("exit\n")
+            processStdin?.flush()
+        } catch (_: Exception){
+        }
+        try{
+            processStdin?.close()
+            processStdin = null
             process?.inputStream?.close()
             process?.outputStream?.close()
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
