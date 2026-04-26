@@ -1,9 +1,11 @@
 ## 1.2.15
 * Windows 修复：某些情况下可能监听不到剪贴板的问题
 * Linux 修复：在Wayland下崩溃的问题
+* Android 修复：Shizuku进程泄露和特定场景下的闪退问题
 ---
 * Windows fix: An issue where clipboard content is sometimes not detected.
 * Linux fix: Crash on wayland
+* Android fix: Shizuku process leak and crashes in specific scenarios
 
 ## 1.2.14
 * Android 优化：移除 FileProvider
