@@ -12,6 +12,7 @@ import java.io.InputStreamReader
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.system.exitProcess
 
 
 open class ClipboardListenerService : IClipboardListenerService.Stub() {
@@ -55,11 +56,13 @@ open class ClipboardListenerService : IClipboardListenerService.Stub() {
         filePath: String
     ): Boolean {
         val dirPath = File(filePath).parent
+        val hostPid = android.os.Process.myPid()
         val commands = arrayOf(
             "app_process",
             "-Djava.class.path=$filePath",
             dirPath,
-            "top.coclyun.clipshare.clipboard_listener.ClipboardListener"
+            "top.coclyun.clipshare.clipboard_listener.ClipboardListener",
+            hostPid.toString()
         )
         Log.d(TAG, "try run process: ${buildCommandsWithSpace(commands)}")
         return tryRunAndWait(callback, useRoot, commands, false)
@@ -135,16 +138,13 @@ open class ClipboardListenerService : IClipboardListenerService.Stub() {
     }
 
     private fun stopProcess(){
-        try{
-            process?.inputStream?.close()
+        try {
+            val os = DataOutputStream(process!!.outputStream)
+            os.writeBytes("exit\n")
+            os.flush()
             process?.outputStream?.close()
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                process?.destroyForcibly()
-            } else {
-                process?.destroy()
-            }
             process = null
-        } catch (e: Exception){
+        } catch (e: Exception) {
             e.printStackTrace()
         }
     }
@@ -156,7 +156,7 @@ open class ClipboardListenerService : IClipboardListenerService.Stub() {
         Log.i(TAG, "destroy")
         stopProcess()
         if(!isRootMode) {
-            System.exit(0)
+            exitProcess(0)
         }
     }
 

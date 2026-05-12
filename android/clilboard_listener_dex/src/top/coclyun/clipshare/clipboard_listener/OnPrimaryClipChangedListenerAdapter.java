@@ -11,6 +11,8 @@ import java.util.Arrays;
 
 
 //https://cs.android.com/android-studio/platform/tools/adt/idea/+/mirror-goog-studio-main:streaming/screen-sharing-agent/app/src/main/java/com/android/tools/screensharing/ClipboardAdapter.java;l=29?q=Iclipboard&sq=&hl=zh-cn
+//https://cs.android.com/android/platform/superproject/+/android-latest-release:frameworks/base/services/core/java/com/android/server/clipboard/ClipboardService.java;l=136?q=clipboardservice&hl=zh-cn
+//https://cs.android.com/android/platform/superproject/+/android-latest-release:frameworks/base/core/java/android/content/ClipboardManager.java;l=40?q=clipboardmanager&hl=zh-cn
 public abstract class OnPrimaryClipChangedListenerAdapter extends IOnPrimaryClipChangedListener.Stub {
     private static LocalDateTime lastTime = LocalDateTime.now();
     protected static long MIN_INTERVAL_MS = 100;
@@ -25,7 +27,6 @@ public abstract class OnPrimaryClipChangedListenerAdapter extends IOnPrimaryClip
     private final int devId;
 
     public OnPrimaryClipChangedListenerAdapter(IClipboard clipboard) throws NoSuchMethodException {
-        //I don't know why on some systems, such as Xiaomi, userId must be 0 to listen (although in reality UID is 2000)
         this(clipboard, "com.android.shell", null, 0, 0);
     }
 
@@ -39,8 +40,13 @@ public abstract class OnPrimaryClipChangedListenerAdapter extends IOnPrimaryClip
         var methods = clipboard.getClass().getDeclaredMethods();
         addPrimaryClipChangedListenerMethod = findMethodAndMakeAccessible(methods, "addPrimaryClipChangedListener");
         addPrimaryClipChangedListenerMethodVersion = addPrimaryClipChangedListenerMethod.getParameterCount();
+        System.out.println(new Event(EventEnum.comment, "addPrimaryClipChangedListenerMethodVersion = " + addPrimaryClipChangedListenerMethodVersion));
+        System.out.println(new Event(EventEnum.comment, "addPrimaryClipChangedListenerMethod = " + Arrays.toString(addPrimaryClipChangedListenerMethod.getParameters())));
+
         removePrimaryClipChangedListenerMethod = findMethodAndMakeAccessible(methods, "removePrimaryClipChangedListener");
         removePrimaryClipChangedListenerMethodVersion = removePrimaryClipChangedListenerMethod.getParameterCount();
+        System.out.println(new Event(EventEnum.comment, "removePrimaryClipChangedListenerMethodVersion = " + removePrimaryClipChangedListenerMethodVersion));
+        System.out.println(new Event(EventEnum.comment, "removePrimaryClipChangedListenerMethod = " + Arrays.toString(removePrimaryClipChangedListenerMethod.getParameters())));
     }
 
     private static Method findMethodAndMakeAccessible(Method[] methods, String name) throws NoSuchMethodException {

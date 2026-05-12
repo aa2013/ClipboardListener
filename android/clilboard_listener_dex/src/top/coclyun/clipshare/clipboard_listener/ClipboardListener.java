@@ -3,20 +3,28 @@ package top.coclyun.clipshare.clipboard_listener;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.IClipboard;
+import android.os.Handler;
 import android.os.Looper;
+import android.system.ErrnoException;
 import android.system.Os;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
-import java.time.LocalDateTime;
 import java.util.Arrays;
 
 public class ClipboardListener {
-    public static void main(String[] args) throws InvocationTargetException, IllegalAccessException {
+
+    // args[0] is host process id
+    public static void main(String[] args) {
+        System.out.println(new Event(EventEnum.comment, "start args = " + Arrays.toString(args)));
         boolean registered = false;
         OnPrimaryClipChangedListenerAdapter adapter = null;
+        Looper mainLooper = null;
+        Thread monitorThread = null;
         try {
             Looper.prepare();
+            mainLooper = Looper.myLooper();
             System.out.println(new Event(EventEnum.comment, "uid = " + Os.getuid()));
             Class<?> activityThread = Class.forName("android.app.ActivityThread");
             System.out.println(new Event(EventEnum.comment, "activityThread = " + activityThread));
@@ -32,12 +40,7 @@ public class ClipboardListener {
             mServiceField.setAccessible(true);
             var clipboard = (IClipboard) mServiceField.get(cm);
             System.out.println(new Event(EventEnum.comment, "IClipboard = " + clipboard));
-            adapter = new OnPrimaryClipChangedListenerAdapter(clipboard) {
-                @Override
-                public void onPrimaryClipChanged() {
-                    System.out.println(new Event(EventEnum.onChanged, LocalDateTime.now().toString()));
-                }
-            };
+            adapter = new PrimaryClipChangedListenerAdapter(clipboard);
             registered = adapter.register();
             if (registered) {
                 System.out.println(new Event(EventEnum.comment, "Clipboard listening started..."));
@@ -46,15 +49,70 @@ public class ClipboardListener {
                 System.out.println(new Event(EventEnum.eof, "finished"));
                 System.exit(1);
             }
+
+            monitorThread = monitorExitSignal(mainLooper);
+
+            var handler = new Handler(mainLooper);
+            monitorHostProcess(Integer.parseInt(args[0]), handler, 1000);
+
             Looper.loop();
         } catch (Exception e) {
             System.out.println(new Event(EventEnum.fatal, "exception: " + e.getMessage() + ". "));
             e.printStackTrace();
+            if (mainLooper != null) {
+                mainLooper.quitSafely();
+            }
+            if (monitorThread != null && monitorThread.isAlive()) {
+                monitorThread.interrupt();
+            }
         } finally {
             System.out.println(new Event(EventEnum.eof, "finished"));
-            if (adapter != null && registered) {
-                adapter.remove();
+            try {
+                if (adapter != null && registered) {
+                    adapter.remove();
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
             }
         }
+    }
+
+    private static Thread monitorExitSignal(Looper looper) {
+        var thread = new Thread(() -> {
+            try {
+                BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
+                String line;
+                while ((line = br.readLine()) != null) {
+                    if ("exit".equals(line)) {
+                        looper.quitSafely();
+                        System.out.println(new Event(EventEnum.comment, "receive exit command"));
+                        break;
+                    }
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+                System.out.println(new Event(EventEnum.comment, e.getMessage()));
+            }
+        });
+        thread.start();
+        return thread;
+    }
+
+    public static boolean isProcessAlive(int pid) {
+        try {
+            Os.kill(pid, 0);
+            return true;
+        } catch (ErrnoException e) {
+            return false;
+        }
+    }
+
+    private static void monitorHostProcess(int pid, Handler handler, long delayMillis) {
+        if (!isProcessAlive(pid)) {
+            System.err.println(new Event(EventEnum.comment, "host dead"));
+            System.exit(0);
+            return;
+        }
+        handler.postDelayed(() -> monitorHostProcess(pid, handler, delayMillis), delayMillis);
     }
 }

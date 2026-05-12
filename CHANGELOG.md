@@ -1,3 +1,8 @@
+## 1.2.16
+* Android 修复：Root 模式下的隐藏api监听进程的泄露问题
+---
+* Android fix: Leakage issue of hidden API listening process in Root mode
+
 ## 1.2.15
 * Windows 修复：某些情况下可能监听不到剪贴板的问题
 * Linux 修复：在Wayland下崩溃的问题

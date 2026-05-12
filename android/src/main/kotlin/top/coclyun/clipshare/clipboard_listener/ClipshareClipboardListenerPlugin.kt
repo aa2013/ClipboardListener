@@ -801,7 +801,7 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
         try {
             latestWriteClipboardPkgService?.destroy()
             latestWriteClipboardPkgService = null
-            if (clipboardSourceArgs != null && clipboardSourceServiceConn != null) {
+            if (clipboardSourceArgs != null && clipboardSourceServiceConn != null && currentEnv == EnvironmentType.shizuku) {
                 Shizuku.unbindUserService(
                     clipboardSourceArgs!!,
                     clipboardSourceServiceConn!!,
