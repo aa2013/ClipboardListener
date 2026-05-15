@@ -20,6 +20,7 @@ open class ClipboardListenerService : IClipboardListenerService.Stub() {
     private var process: Process? = null
     private var stopped: Boolean = false
     private var isRootMode: Boolean = false;
+    private var useHiddenApi: Boolean = false
     private fun buildCommandsWithSpace(commands: Array<String>): String {
         val res = Array(commands.size) { "" }
         for (i in commands.indices) {
@@ -40,6 +41,7 @@ open class ClipboardListenerService : IClipboardListenerService.Stub() {
     ) {
         isRootMode = useRoot
         var success = false;
+        this.useHiddenApi = useHiddenApi
         if (useHiddenApi) {
             success = tryRunProcess(callback, useRoot, filePath)
         } else {
@@ -137,13 +139,22 @@ open class ClipboardListenerService : IClipboardListenerService.Stub() {
         stopProcess()
     }
 
-    private fun stopProcess(){
+    private fun stopProcess() {
         try {
-            val os = DataOutputStream(process!!.outputStream)
-            os.writeBytes("exit\n")
-            os.flush()
-            process?.outputStream?.close()
+            if (useHiddenApi) {
+                val os = DataOutputStream(process!!.outputStream)
+                os.writeBytes("exit\n")
+                os.flush()
+            }
+            val processTemp = process;
             process = null
+            processTemp?.outputStream?.close()
+            processTemp?.inputStream?.close()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                processTemp?.destroyForcibly()
+            } else {
+                processTemp?.destroy()
+            }
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -155,7 +166,7 @@ open class ClipboardListenerService : IClipboardListenerService.Stub() {
     override fun destroy() {
         Log.i(TAG, "destroy")
         stopProcess()
-        if(!isRootMode) {
+        if (!isRootMode) {
             exitProcess(0)
         }
     }

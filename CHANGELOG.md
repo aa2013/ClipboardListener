@@ -1,3 +1,8 @@
+## 1.2.17
+* Android 修复：v1.2.16 导致的日志模式进程泄露问题
+---
+* Android fix: Log mode process leakage caused by v1.2.16
+
 ## 1.2.16
 * Android 修复：Root 模式下的隐藏api监听进程的泄露问题
 ---
