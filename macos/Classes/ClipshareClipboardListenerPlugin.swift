@@ -11,6 +11,8 @@ public class ClipshareClipboardListenerPlugin: NSObject, FlutterPlugin {
     private static let kStoreCurrentWindowHwnd = "storeCurrentWindowHwnd"
     private static let kPasteToPreviousWindow = "pasteToPreviousWindow"
     private static let kCopy = "copy"
+    // Explicitly write PNG data so third-party clipboard managers keep the image type stable.
+    private static let kPngPasteboardType = NSPasteboard.PasteboardType("public.png")
 
 
     private var channel: FlutterMethodChannel!
@@ -89,9 +91,13 @@ public class ClipshareClipboardListenerPlugin: NSObject, FlutterPlugin {
             success = pasteboard.setString(content, forType: .string)
         } else if lower == "image" {
             // 处理图片类型
-            if let image = NSImage(contentsOfFile: content) {
+            if let image = NSImage(contentsOfFile: content),
+               let pngData = createPngData(from: image) {
+                // Write a concrete PNG payload instead of NSImage's default TIFF representation.
                 pasteboard.clearContents()
-                success = pasteboard.writeObjects([image])
+                let item = NSPasteboardItem()
+                item.setData(pngData, forType: Self.kPngPasteboardType)
+                success = pasteboard.writeObjects([item])
             } else {
                 print("Failed to load image from path: \(content)")
                 success = false
@@ -204,9 +210,7 @@ public class ClipshareClipboardListenerPlugin: NSObject, FlutterPlugin {
         let fileName = "clipboard_\(getCurrentTimeWithMilliseconds()).png"
         let filePath = (imageSavePath as NSString).appendingPathComponent(fileName)
 
-        guard let tiffData = image.tiffRepresentation,
-        let bitmapImage = NSBitmapImageRep(data: tiffData),
-        let pngData = bitmapImage.representation(using: .png, properties: [:]) else {
+        guard let pngData = createPngData(from: image) else {
             return nil
         }
 
@@ -236,14 +240,23 @@ public class ClipshareClipboardListenerPlugin: NSObject, FlutterPlugin {
         // 调整图片大小（可选，避免Base64数据过大）
         let resizedImage = resizeImage(image: image, maxSize: NSSize(width: 64, height: 64))
 
-        guard let tiffData = resizedImage.tiffRepresentation,
-        let bitmapImage = NSBitmapImageRep(data: tiffData),
-        let pngData = bitmapImage.representation(using: .png, properties: [:]) else {
+        guard let pngData = createPngData(from: resizedImage) else {
             return nil
         }
 
         // 转换为 Base64 字符串
         return pngData.base64EncodedString()
+    }
+
+    // Reuse one PNG encoder so clipboard writes and exported temp files stay consistent.
+    private func createPngData(from image: NSImage) -> Data? {
+        guard let tiffData = image.tiffRepresentation,
+              let bitmapImage = NSBitmapImageRep(data: tiffData),
+              let pngData = bitmapImage.representation(using: .png, properties: [:]) else {
+            return nil
+        }
+
+        return pngData
     }
 
     private func resizeImage(image: NSImage, maxSize: NSSize) -> NSImage {
