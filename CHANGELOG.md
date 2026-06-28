@@ -1,3 +1,8 @@
+## 1.3.1
+* Mac 修复: Mac 图片复制时未指定格式可能导致粘贴为 TIFF 格式的问题
+---
+* Mac Fix: Resolves an issue where copying an image without specifying a format could result in it being pasted as a TIFF file.
+
 ## 1.3.0
 * 新增 iOS 支持
 ---
