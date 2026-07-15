@@ -1,3 +1,10 @@
+## 1.3.2
+* Android 修复：Shizuku binder 断开时安全清理本地状态，避免继续调用失效的 user service。
+* Android 新增：提供 Shizuku binder 可用/断开状态回调，并与权限请求结果回调区分。
+---
+* Android fix: Safely clears local state when the Shizuku binder disconnects, avoiding calls into dead user services.
+* Android feat: Adds a Shizuku binder availability callback separated from permission request results.
+
 ## 1.3.1
 * Mac 修复: Mac 图片复制时未指定格式可能导致粘贴为 TIFF 格式的问题
 ---
