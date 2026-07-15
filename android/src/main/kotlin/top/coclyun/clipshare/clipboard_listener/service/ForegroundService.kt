@@ -190,12 +190,49 @@ class ForegroundService : Service() {
     }
     private val onBinderDeadListener = OnBinderDeadListener {
         Log.d(TAG, "Shizuku binderDead")
+        stopShizukuListeningLocally("binder dead")
     }
     //endregion
 
+    /**
+     * 判断 Shizuku binder 是否仍然可用。
+     *
+     * 前台服务在 binder 失效后不能再调用远端 user service 或 unbind。
+     */
+    private fun isShizukuBinderAvailable(): Boolean {
+        return try {
+            Shizuku.pingBinder()
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Shizuku 断开或授权被撤销后的本地收口。
+     *
+     * 这里只清理本地线程和引用，不调用远端 stopListening/exit，避免已失效 binder 触发进程崩溃。
+     */
+    private fun stopShizukuListeningLocally(reason: String) {
+        Log.w(TAG, "stop Shizuku listening locally: $reason")
+        listenerThread?.interrupt()
+        listenerThread = null
+        listenerService = null
+        plugin?.listening = false
+        plugin?.listeningServiceConn = null
+        notifyForeground(
+            plugin?.config?.shizukuDisconnectedTitle ?: "Shizuku disconnected",
+            plugin?.config?.shizukuDisconnectedText ?: "Shizuku service has been disconnected"
+        )
+        plugin?.handleShizukuUnavailable(reason)
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d(TAG, "onStartCommand")
-        listenerService?.stopListening()
+        try {
+            listenerService?.stopListening()
+        } catch (e: Exception) {
+            Log.w(TAG, "stop previous listener service failed", e)
+        }
         listenerService = null
         useRoot = intent?.getBooleanExtra("useRoot", false) ?: false
         plugin = ClipshareClipboardListenerPlugin.instance
@@ -231,11 +268,17 @@ class ForegroundService : Service() {
         }
         if (!useRoot) {
             if (plugin!!.listeningServiceConn != null) {
-                Shizuku.unbindUserService(
-                    plugin!!.listeningServiceArgs!!,
-                    plugin!!.listeningServiceConn,
-                    true
-                )
+                if (isShizukuBinderAvailable()) {
+                    try {
+                        Shizuku.unbindUserService(
+                            plugin!!.listeningServiceArgs!!,
+                            plugin!!.listeningServiceConn,
+                            true
+                        )
+                    } catch (e: Exception) {
+                        stopShizukuListeningLocally("unbind previous listener failed: ${e.message}")
+                    }
+                }
                 plugin!!.listeningServiceConn = null
             }
             plugin!!.listeningServiceConn = object : ServiceConnection {
@@ -272,24 +315,22 @@ class ForegroundService : Service() {
                 }
 
                 override fun onServiceDisconnected(componentName: ComponentName) {
-                    try {
-                        listenerService?.stopListening()
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    } finally {
-                        listenerService = null
-                    }
-                    notifyForeground(
-                        plugin!!.config.shizukuDisconnectedTitle,
-                        plugin!!.config.shizukuDisconnectedText
-                    )
+                    stopShizukuListeningLocally("listener service disconnected")
                 }
             }
             Handler().postDelayed({
-                Shizuku.bindUserService(
-                    plugin!!.listeningServiceArgs!!,
-                    plugin!!.listeningServiceConn!!
-                )
+                if (!isShizukuBinderAvailable()) {
+                    stopShizukuListeningLocally("bind listener skipped because Shizuku is unavailable")
+                    return@postDelayed
+                }
+                try {
+                    Shizuku.bindUserService(
+                        plugin!!.listeningServiceArgs!!,
+                        plugin!!.listeningServiceConn!!
+                    )
+                } catch (e: Exception) {
+                    stopShizukuListeningLocally("bind listener failed: ${e.message}")
+                }
             }, 500)
         } else {
             listenerService = ClipboardListenerService()
@@ -332,15 +373,19 @@ class ForegroundService : Service() {
                 )
             } catch (e: Exception) {
                 e.printStackTrace()
-                Log.i(TAG, "startListening: error ${e.message} listening ${!plugin!!.listening}")
+                Log.i(TAG, "startListening: error ${e.message} listening ${plugin?.listening != true}")
+                // 监听线程可能晚于插件释放后退出，通知文案使用安全兜底避免二次崩溃。
                 notifyForeground(
-                    plugin!!.config.errorTitle,
+                    plugin?.config?.errorTitle ?: "Error",
                     "${errorTextPrefix}${e.message}"
                 )
             }
             plugin?.listening = false
             Log.i(TAG, "startListening: stopped")
-            notifyForeground(plugin!!.config.stopListeningTitle, plugin!!.config.stopListeningText)
+            notifyForeground(
+                plugin?.config?.stopListeningTitle ?: "Stopped",
+                plugin?.config?.stopListeningText ?: "Clipboard listener stopped"
+            )
         }
         listenerThread?.isDaemon = true
         listenerThread?.start()
@@ -352,15 +397,19 @@ class ForegroundService : Service() {
         val t = listenerThread
         listenerThread = null
         t?.interrupt()
-        try {
-            listenerService?.exit()
-        } catch (_: Exception) {
-
+        if (useRoot || isShizukuBinderAvailable()) {
+            try {
+                listenerService?.exit()
+            } catch (e: Exception) {
+                Log.w(TAG, "exit listener service failed", e)
+            }
         }
         try {
-            plugin?.listeningServiceArgs?.let { args ->
-                plugin?.listeningServiceConn?.let { conn ->
-                    Shizuku.unbindUserService(args, conn, true)
+            if (!useRoot && isShizukuBinderAvailable()) {
+                plugin?.listeningServiceArgs?.let { args ->
+                    plugin?.listeningServiceConn?.let { conn ->
+                        Shizuku.unbindUserService(args, conn, true)
+                    }
                 }
             }
             plugin?.listeningServiceConn = null
@@ -427,13 +476,12 @@ class ForegroundService : Service() {
         val updatedBuilder: NotificationCompat.Builder =
             NotificationCompat.Builder(this, foregroundServiceNotifyChannelId)
                 .setSmallIcon(getAppIcon(applicationContext))
-                .setContentTitle(plugin!!.config.serviceRunningTitle)
+                .setContentTitle(title)
                 .setOngoing(true)
                 .setSound(null)
                 .setContentIntent(createPendingIntent())
                 .setBadgeIconType(NotificationCompat.BADGE_ICON_NONE)
                 .setContentText(content)
-                .setContentTitle(title)
         val manger = getSystemService(
             NOTIFICATION_SERVICE
         ) as NotificationManager
@@ -456,9 +504,14 @@ class ForegroundService : Service() {
     }
 
     private fun createPendingIntent(): PendingIntent {
-        val intent = Intent(plugin!!.context, ClipshareClipboardListenerPlugin.activityClass)
+        // 前台服务失效收口时 plugin 可能已经被释放，通知点击回主界面不能依赖 plugin 引用。
+        val intent = try {
+            Intent(applicationContext, ClipshareClipboardListenerPlugin.activityClass)
+        } catch (e: Exception) {
+            packageManager.getLaunchIntentForPackage(packageName) ?: Intent()
+        }
         return PendingIntent.getActivity(
-            plugin!!.context,
+            applicationContext,
             0,
             intent,
             PendingIntent.FLAG_IMMUTABLE

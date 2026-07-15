@@ -38,6 +38,11 @@ abstract mixin class ClipboardListener {
   ///
   /// [isGranted] When the Android system version is before Android 10, always return true
   void onPermissionStatusChanged(EnvironmentType environment, bool isGranted) {}
+
+  /// Called when the Shizuku binder connectivity changes. (Android only)
+  ///
+  /// [available] only means that the Shizuku service binder is reachable; it does not mean the app has Shizuku permission.
+  void onShizukuBinderStatusChanged(bool available) {}
 }
 
 //common
@@ -60,6 +65,8 @@ const kSetTempFileDir = "setTempFileDir";
 
 //Android
 const kOnPermissionStatusChanged = "onPermissionStatusChanged";
+const kOnShizukuBinderStatusChanged = "onShizukuBinderStatusChanged";
+const kStartShizukuBinderObserver = "startShizukuBinderObserver";
 const kCheckPermission = "checkPermission";
 const kRequestPermission = "requestPermission";
 const kGetShizukuversion = "getShizukuVersion";
@@ -81,13 +88,29 @@ class ClipboardManager {
 
   final List<ClipboardListener> _listeners = [];
   static final ClipboardManager instance = ClipboardManager._private();
+  bool _startedShizukuBinderObserver = false;
 
   void addListener(ClipboardListener listener) {
     _listeners.add(listener);
+    _startShizukuBinderObserver();
   }
 
   void removeListener(ClipboardListener listener) {
     _listeners.remove(listener);
+  }
+
+  /// Starts the Shizuku binder status observer.
+  ///
+  /// This only asks the Android side to register binder callbacks and does not actively query Shizuku state.
+  /// The native side uses a sticky listener, so an already available binder is reported once after subscription.
+  Future<void> _startShizukuBinderObserver() async {
+    if (!Platform.isAndroid || _startedShizukuBinderObserver) return;
+    _startedShizukuBinderObserver = true;
+    try {
+      await _channel.invokeMethod(kStartShizukuBinderObserver);
+    } catch (_) {
+      _startedShizukuBinderObserver = false;
+    }
   }
 
   ///start listening clipboard change event
@@ -310,6 +333,10 @@ class ClipboardManager {
           var env = EnvironmentType.parse(arguments['env']);
           var isGranted = arguments['isGranted'];
           listener.onPermissionStatusChanged(env, isGranted);
+          break;
+        case kOnShizukuBinderStatusChanged:
+          var available = arguments['available'] == true;
+          listener.onShizukuBinderStatusChanged(available);
           break;
       }
     }

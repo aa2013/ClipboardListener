@@ -36,6 +36,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import rikka.shizuku.Shizuku
+import rikka.shizuku.Shizuku.OnBinderDeadListener
+import rikka.shizuku.Shizuku.OnBinderReceivedListener
 import rikka.shizuku.Shizuku.UserServiceArgs
 import top.coclyun.clipshare.clipboard_listener.service.ActivityChangedService
 import top.coclyun.clipshare.clipboard_listener.service.ClipboardListenerService
@@ -55,8 +57,10 @@ import java.util.Locale
 const val CHANNEL_NAME = "top.coclyun.clipshare/clipboard_listener"
 const val ON_CLIPBOARD_CHANGED = "onClipboardChanged"
 const val ON_PERMISSION_STATUS_CHANGED = "onPermissionStatusChanged"
+const val ON_SHIZUKU_BINDER_STATUS_CHANGED = "onShizukuBinderStatusChanged"
 const val START_LISTENING = "startListening"
 const val STOP_LISTENING = "stopListening"
+const val START_SHIZUKU_BINDER_OBSERVER = "startShizukuBinderObserver"
 const val GET_LATEST_WRITE_CLIPBOARD_SOURCE = "getLatestWriteClipboardSource"
 const val GET_SHIZUKUVERSION = "getShizukuVersion"
 const val CHECK_IS_RUNNING = "checkIsRunning"
@@ -93,6 +97,20 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
     private var commandRunnerBinding = false
     private val commandRunnerScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val clipboardSourceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    @Volatile
+    private var observingShizukuBinder = false
+    @Volatile
+    private var lastShizukuBinderAvailable: Boolean? = null
+
+    private val onShizukuBinderReceivedListener = OnBinderReceivedListener {
+        Log.d(TAG, "Shizuku binder received")
+        notifyShizukuBinderStatusChanged(true)
+    }
+
+    private val onShizukuBinderDeadListener = OnBinderDeadListener {
+        Log.d(TAG, "Shizuku binder dead")
+        handleShizukuUnavailable("binder dead")
+    }
 
     companion object {
         @JvmStatic
@@ -115,6 +133,7 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
         ).daemon(false).processNameSuffix("clipshare-listening-service")
         Log.d(TAG, "applicationId: ${config.applicationId}")
         Shizuku.addRequestPermissionResultListener(this);
+        startShizukuBinderObserver()
         instance = this
         ClipboardListener.init(this, context)
         channel.setMethodCallHandler(this)
@@ -123,6 +142,7 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         destroyCommandRunnerService()
+        stopShizukuBinderObserver()
         channel.setMethodCallHandler(null)
         instance = null
         Shizuku.removeRequestPermissionResultListener(this);
@@ -134,6 +154,8 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
             START_LISTENING -> onStartListeningCalled(call, result)
 
             STOP_LISTENING -> onStopListeningCalled(call, result)
+
+            START_SHIZUKU_BINDER_OBSERVER -> onStartShizukuBinderObserverCalled(call, result)
 
             GET_SHIZUKUVERSION -> onGetShizukuVersionCalled(call, result)
 
@@ -163,6 +185,92 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
     }
 
     //region Flutter Method Channel Events
+
+    private fun onStartShizukuBinderObserverCalled(call: MethodCall, result: Result) {
+        startShizukuBinderObserver()
+        result.success(null)
+    }
+
+    /**
+     * 注册 Shizuku binder 生命周期监听。
+     *
+     * binder 可用只表示 Shizuku 服务已经可以连接，不代表当前应用已经获得 Shizuku 授权。
+     * 使用 sticky listener 是为了在 Dart 侧订阅后，如果 binder 已经可用，也能立即收到一次状态回调。
+     */
+    private fun startShizukuBinderObserver() {
+        if (observingShizukuBinder) {
+            lastShizukuBinderAvailable?.let { notifyShizukuBinderStatusChanged(it) }
+            return
+        }
+        try {
+            Shizuku.addBinderReceivedListenerSticky(onShizukuBinderReceivedListener)
+            Shizuku.addBinderDeadListener(onShizukuBinderDeadListener)
+            observingShizukuBinder = true
+        } catch (e: Exception) {
+            Log.w(TAG, "start Shizuku binder observer failed", e)
+            notifyShizukuBinderStatusChanged(false)
+        }
+    }
+
+    /**
+     * 移除 Shizuku binder 监听，避免 Flutter 引擎销毁后继续向失效 channel 发送事件。
+     */
+    private fun stopShizukuBinderObserver() {
+        if (!observingShizukuBinder) return
+        try {
+            Shizuku.removeBinderReceivedListener(onShizukuBinderReceivedListener)
+            Shizuku.removeBinderDeadListener(onShizukuBinderDeadListener)
+        } catch (e: Exception) {
+            Log.w(TAG, "stop Shizuku binder observer failed", e)
+        } finally {
+            observingShizukuBinder = false
+        }
+    }
+
+    /**
+     * 将 Shizuku binder 状态通知给 Dart 层。
+     *
+     * 该事件只承载服务可连接性，权限请求结果仍由 onPermissionStatusChanged 单独通知。
+     */
+    private fun notifyShizukuBinderStatusChanged(available: Boolean) {
+        lastShizukuBinderAvailable = available
+        if (!::channel.isInitialized) return
+        channel.invokeMethod(
+            ON_SHIZUKU_BINDER_STATUS_CHANGED,
+            mapOf("available" to available)
+        )
+    }
+
+    /**
+     * 判断 Shizuku binder 是否仍可用。
+     *
+     * 该方法只用于插件内部防御，不向 Dart 暴露主动查询能力。
+     */
+    private fun isShizukuBinderAvailable(): Boolean {
+        return try {
+            Shizuku.pingBinder()
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Shizuku 断开或授权被撤销后的统一收口。
+     *
+     * 此时远端 user service 可能已经失效，不能再调用 destroy、exit、unbind 等依赖
+     * live binder 的 API，只清理本地引用并把状态通知给 Dart。
+     */
+    fun handleShizukuUnavailable(reason: String) {
+        Log.w(TAG, "Shizuku unavailable: $reason")
+        listening = false
+        commandRunnerBinding = false
+        commandRunnerService = null
+        latestWriteClipboardPkgService = null
+        if (currentEnv == EnvironmentType.shizuku) {
+            currentEnv = null
+        }
+        notifyShizukuBinderStatusChanged(false)
+    }
 
     private fun onStartListeningCalled(call: MethodCall, result: Result) {
         currentEnv = getCurrentEnvironment()
@@ -273,7 +381,16 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
     }
 
     private fun onGetShizukuVersionCalled(call: MethodCall, result: Result) {
-        result.success(Shizuku.getVersion())
+        if (!isShizukuBinderAvailable()) {
+            result.success(null)
+            return
+        }
+        try {
+            result.success(Shizuku.getVersion())
+        } catch (e: Exception) {
+            handleShizukuUnavailable("get Shizuku version failed: ${e.message}")
+            result.success(null)
+        }
     }
 
     private fun onCheckIsRunningCalled(call: MethodCall, result: Result) {
@@ -304,8 +421,13 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
         when (env) {
             EnvironmentType.shizuku -> {
                 try {
-                    Shizuku.requestPermission(requestShizukuCode)
+                    if (isShizukuBinderAvailable()) {
+                        Shizuku.requestPermission(requestShizukuCode)
+                    } else {
+                        onPermissionStatusChanged(EnvironmentType.shizuku, false)
+                    }
                 } catch (e: Exception) {
+                    handleShizukuUnavailable("request Shizuku permission failed: ${e.message}")
                     onPermissionStatusChanged(EnvironmentType.shizuku, false)
                 }
             }
@@ -506,7 +628,8 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
                 )
                 result.success(null)
             } else {
-                result.error("commandRunnerService not init", null, null)
+                handleShizukuUnavailable("clipboard permission command runner not initialized")
+                result.success(null)
             }
         }
     }
@@ -524,7 +647,8 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
                 )
                 result.success(res)
             } else {
-                result.error("commandRunnerService not init", null, null)
+                handleShizukuUnavailable("privileged command runner not initialized")
+                result.success(null)
             }
         }
     }
@@ -538,6 +662,10 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
         }
         if (currentEnv == EnvironmentType.root && commandRunnerService == null) {
             commandRunnerService = CommandRunnerService()
+            return
+        }
+        if (!checkShizukuPermission()) {
+            handleShizukuUnavailable("command runner bind skipped because Shizuku is unavailable")
             return
         }
         if (commandRunnerServiceArgs == null) {
@@ -562,19 +690,19 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
 
                 override fun onServiceDisconnected(name: ComponentName) {
                     commandRunnerBinding = false
-                    try {
-                        commandRunnerService?.destroy()
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                    } finally {
-                        commandRunnerService = null
-                    }
+                    commandRunnerService = null
+                    handleShizukuUnavailable("command runner service disconnected")
                     Log.w(TAG, "onServiceDisconnected ${name.className}")
                 }
             }
         }
-        commandRunnerBinding = true
-        Shizuku.bindUserService(commandRunnerServiceArgs!!, commandRunnerServiceConn!!)
+        try {
+            commandRunnerBinding = true
+            Shizuku.bindUserService(commandRunnerServiceArgs!!, commandRunnerServiceConn!!)
+        } catch (e: Exception) {
+            commandRunnerBinding = false
+            handleShizukuUnavailable("bind command runner failed: ${e.message}")
+        }
     }
 
     suspend fun waitCommandRunnerService(timeout: Long = 5000) {
@@ -588,8 +716,10 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
     @Synchronized
     private fun destroyCommandRunnerService() {
         try {
-            commandRunnerService?.destroy()
-            if (commandRunnerServiceArgs != null && commandRunnerServiceConn != null) {
+            if (currentEnv == EnvironmentType.root || isShizukuBinderAvailable()) {
+                commandRunnerService?.destroy()
+            }
+            if (currentEnv == EnvironmentType.shizuku && isShizukuBinderAvailable() && commandRunnerServiceArgs != null && commandRunnerServiceConn != null) {
                 Shizuku.unbindUserService(
                     commandRunnerServiceArgs!!,
                     commandRunnerServiceConn!!,
@@ -783,6 +913,10 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
                     true
                 )
             } else {
+                if (!checkShizukuPermission()) {
+                    handleShizukuUnavailable("clipboard source bind skipped because Shizuku is unavailable")
+                    return false
+                }
                 if (clipboardSourceArgs != null && clipboardSourceServiceConn != null) {
                     Shizuku.bindUserService(clipboardSourceArgs!!, clipboardSourceServiceConn!!)
                 } else {
@@ -792,6 +926,9 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
             return true
         } catch (e: Exception) {
             e.printStackTrace()
+            if (env == EnvironmentType.shizuku) {
+                handleShizukuUnavailable("start clipboard source service failed: ${e.message}")
+            }
             Log.e(TAG, "startClipboardSourceService failed! Error: ${e.message}")
         }
         return false
@@ -799,9 +936,11 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
 
     private fun stopClipboardSourceService() {
         try {
-            latestWriteClipboardPkgService?.destroy()
+            if (currentEnv == EnvironmentType.root || isShizukuBinderAvailable()) {
+                latestWriteClipboardPkgService?.destroy()
+            }
             latestWriteClipboardPkgService = null
-            if (clipboardSourceArgs != null && clipboardSourceServiceConn != null && currentEnv == EnvironmentType.shizuku) {
+            if (clipboardSourceArgs != null && clipboardSourceServiceConn != null && currentEnv == EnvironmentType.shizuku && isShizukuBinderAvailable()) {
                 Shizuku.unbindUserService(
                     clipboardSourceArgs!!,
                     clipboardSourceServiceConn!!,
@@ -820,6 +959,8 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
         )
         if (isGranted) {
             currentEnv = env
+        } else if (currentEnv == env) {
+            currentEnv = null
         }
     }
 
@@ -857,12 +998,16 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
     }
 
     private fun checkShizukuPermission(): Boolean {
-        if (Shizuku.isPreV11()) {
-            Log.d(TAG, "Pre-v11 is unsupported")
-            Toast.makeText(this.context, "Pre-v11 is unsupported", Toast.LENGTH_LONG).show()
+        if (!isShizukuBinderAvailable()) {
+            handleShizukuUnavailable("check Shizuku permission while binder unavailable")
             return false
         }
         try {
+            if (Shizuku.isPreV11()) {
+                Log.d(TAG, "Pre-v11 is unsupported")
+                Toast.makeText(this.context, "Pre-v11 is unsupported", Toast.LENGTH_LONG).show()
+                return false
+            }
             return if (Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED) {
                 // Granted
                 true
@@ -881,6 +1026,7 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
                 false
             }
         } catch (e: Exception) {
+            handleShizukuUnavailable("check Shizuku permission failed: ${e.message}")
             return false;
         }
     }
