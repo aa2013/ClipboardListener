@@ -575,10 +575,14 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
             result.success(true)
             return;
         }
-        //无环境，默认失败
-        if (currentEnv == null) {
+        if (!ensureClipboardCommandEnvironment()) {
             result.success(false)
             return
+        }
+        // 环境探测可能在上一步才识别出 Android 10 以下系统，此类系统不需要额外 AppOps 授权。
+        if (currentEnv == EnvironmentType.androidPre10) {
+            result.success(true)
+            return;
         }
         commandRunnerScope.launch {
             if (commandRunnerService == null) {
@@ -608,9 +612,14 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
             result.success(null)
             return;
         }
-        if (currentEnv == null) {
+        if (!ensureClipboardCommandEnvironment()) {
             result.success(null)
             return
+        }
+        // 环境探测可能在上一步才识别出 Android 10 以下系统，此类系统不需要执行授权命令。
+        if (currentEnv == EnvironmentType.androidPre10) {
+            result.success(null)
+            return;
         }
         commandRunnerScope.launch {
             if (commandRunnerService == null) {
@@ -632,6 +641,23 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
                 result.success(null)
             }
         }
+    }
+
+    /**
+     * 确保剪贴板 AppOps 命令执行前已经解析出可用工作环境。
+     *
+     * 设置页可能早于 startListening 调用剪贴板权限检查，此时 currentEnv 仍为空；
+     * 这里复用现有环境探测逻辑，避免因初始化顺序竞态把可用的 Shizuku/root 误判为无权限。
+     */
+    private fun ensureClipboardCommandEnvironment(): Boolean {
+        if (currentEnv == null) {
+            currentEnv = getCurrentEnvironment()
+        }
+        if (currentEnv == null) {
+            Log.w(TAG, "clipboard command environment unavailable")
+            return false
+        }
+        return true
     }
 
     private fun executePrivilegedCommand(call: MethodCall, result: Result) {
