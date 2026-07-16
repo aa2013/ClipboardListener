@@ -34,7 +34,7 @@
 
 ```yaml
 dependencies:
-  clipshare_clipboard_listener: ^1.3.1
+  clipshare_clipboard_listener: ^1.3.2
 ```
 
 ### 用法
@@ -67,6 +67,9 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
 
   //剪贴板权限，Android 上部分系统默认设置为使用时允许，此时应用无法在后台操作剪贴板，请求该权限可解决
   bool hasClipboardPermission = false;
+
+  //Shizuku binder 连接状态只表示服务是否可达，不等同于 Shizuku 授权状态
+  bool? shizukuBinderAvailable;
 
   var env = EnvironmentType.none;
 
@@ -115,6 +118,16 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
     setState(() {
       env = environment;
       this.isGranted = isGranted;
+    });
+  }
+
+  ///Shizuku binder 连接状态改变 (当前仅 Android)
+  @override
+  void onShizukuBinderStatusChanged(bool available) {
+    debugPrint("Shizuku binder available: $available");
+    setState(() {
+      // binder 可用只代表 Shizuku 服务可连接，是否授权仍需通过 checkPermission 判断。
+      shizukuBinderAvailable = available;
     });
   }
 
@@ -187,12 +200,15 @@ iOS 需要在 `info.plist` 中增加画中画支持
 | pasteToPreviousWindow         | 粘贴到前一个窗体中（需要在复制前先调用`storeCurrentWindowHwnd`）              | ✖️      | ✔️      | ✔️    | ✔️    | ✖️  |
 | setTempFileDir                | 设置临时文件目录，复制图片后会将文件暂存到该路径下，默认为当前程序路径下                      | ✖️      | ✔️      | ✔️    | ✖️    | ✖️  |
 | onPermissionStatusChanged     | 权限状态改变事件，当前只有Android有效                                    | ✔️      | ✖️      | ✖️    | ✖️    | ✖️  |
+| onShizukuBinderStatusChanged  | Shizuku binder 可用/断开事件，仅表示服务连接状态，不代表已授权                     | ✔️      | ✖️      | ✖️    | ✖️    | ✖️  |
 | checkPermission               | 检查相关权限，如Shizuku、Root等                                     | ✔️      | ✖️      | ✖️    | ✖️    | ✖️  |
 | requestPermission             | 请求相关权限，如Shizuku、Root等                                     | ✔️      | ✖️      | ✖️    | ✖️    | ✖️  |
+| getCurrentEnvironment         | 获取当前可用的 Android 工作环境，如 Shizuku、Root 或 Android 10 以下环境          | ✔️      | ✖️      | ✖️    | ✖️    | ✖️  |
 | getShizukuVersion             | 获取Shizuku版本                                               | ✔️      | ✖️      | ✖️    | ✖️    | ✖️  |
 | getLatestWriteClipboardSource | 获取最近一次写入剪贴板的应用信息（无需无障碍，通过dumpsys，需要Shizuku或Root权限）        | ✔️      | ✖️      | ✖️    | ✖️    | ✖️  |
 | checkAccessibility            | 检查无障碍权限，如无该权限，Andorid系统下`onClipboardChanged`的来源信息为 `null` | ✔️      | ✖️      | ✖️    | ✖️    | ✖️  |
 | requestAccessibility          | 请求无障碍权限                                                   | ✔️      | ✖️      | ✖️    | ✖️    | ✖️  |
 | checkClipboardPermission      | 检查剪贴板权限                                                   | ✔️      | ✖️      | ✖️    | ✖️    | ✖️  |
 | requestClipboardPermission    | 请求并修改剪贴板权限（需要 Shizuku 或 root）                             | ✔️      | ✖️      | ✖️    | ✖️    | ✖️  |
+| executePrivilegedCommand      | 执行特权命令（需要 Shizuku 或 root）                                  | ✔️      | ✖️      | ✖️    | ✖️    | ✖️  |
 

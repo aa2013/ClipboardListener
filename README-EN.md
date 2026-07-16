@@ -37,7 +37,7 @@ Add this to your package's `pubspec.yaml` file:
 
 ```yaml
 dependencies:
-  clipshare_clipboard_listener: ^1.3.1
+  clipshare_clipboard_listener: ^1.3.2
 ```
 
 ### Usage
@@ -71,6 +71,9 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
   // Clipboard permission: on some Android systems, the default is “allow only while using the app,”
   // which prevents the app from accessing the clipboard in the background. Requesting this permission resolves the issue.
   bool hasClipboardPermission = false;
+
+  // Shizuku binder connectivity only means the service is reachable; it is not the Shizuku authorization state.
+  bool? shizukuBinderAvailable;
 
   var env = EnvironmentType.none;
 
@@ -119,6 +122,16 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
     setState(() {
       env = environment;
       this.isGranted = isGranted;
+    });
+  }
+
+  /// Shizuku binder connectivity changed (currently Android only)
+  @override
+  void onShizukuBinderStatusChanged(bool available) {
+    debugPrint("Shizuku binder available: $available");
+    setState(() {
+      // Binder availability only means the Shizuku service is reachable; use checkPermission to verify authorization.
+      shizukuBinderAvailable = available;
     });
   }
 
@@ -189,11 +202,14 @@ iOS requires adding Picture-in-Picture support in `Info.plist`.
 | pasteToPreviousWindow         | Paste into the previous window (requires calling `storeCurrentWindowHwnd` first)                                                 | ✖️      | ✔️      | ✔️    | ✔️    | ✖️  |
 | setTempFileDir                | Set the temporary file directory (default is the current program path)                                                           | ✖️      | ✔️      | ✔️    | ✖️    | ✖️  |
 | onPermissionStatusChanged     | Permission status change event (Android only)                                                                                    | ✔️      | ✖️      | ✖️    | ✖️    | ✖️  |
+| onShizukuBinderStatusChanged  | Shizuku binder availability/disconnect event; connectivity only, not authorization state                                         | ✔️      | ✖️      | ✖️    | ✖️    | ✖️  |
 | checkPermission               | Check permissions (e.g., Shizuku, Root)                                                                                          | ✔️      | ✖️      | ✖️    | ✖️    | ✖️  |
 | requestPermission             | Request permissions (e.g., Shizuku, Root)                                                                                        | ✔️      | ✖️      | ✖️    | ✖️    | ✖️  |
+| getCurrentEnvironment         | Get the currently available Android environment, such as Shizuku, Root, or pre-Android 10                                       | ✔️      | ✖️      | ✖️    | ✖️    | ✖️  |
 | getShizukuVersion             | Get the Shizuku version                                                                                                          | ✔️      | ✖️      | ✖️    | ✖️    | ✖️  |
 | getLatestWriteClipboardSource | Get the latest app that wrote to the clipboard (requires Shizuku or Root)                                                        | ✔️      | ✖️      | ✖️    | ✖️    | ✖️  |
 | checkAccessibility            | Check accessibility permissions (required for clipboard source info on Android)                                                  | ✔️      | ✖️      | ✖️    | ✖️    | ✖️  |
 | requestAccessibility          | Request accessibility permissions                                                                                                | ✔️      | ✖️      | ✖️    | ✖️    | ✖️  |
 | checkClipboardPermission      | Check clipboard permission                                                                                                       | ✔️      | ✖️      | ✖️    | ✖️    | ✖️  |
 | requestClipboardPermission    | Request and modify clipboard permission (requires Shizuku or root)                                                               | ✔️      | ✖️      | ✖️    | ✖️    | ✖️  |
+| executePrivilegedCommand      | Execute privileged commands (requires Shizuku or root)                                                                           | ✔️      | ✖️      | ✖️    | ✖️    | ✖️  |

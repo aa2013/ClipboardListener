@@ -39,8 +39,17 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
   bool hasNotificationPermission = false;
   bool hasAccessibilityPermission = false;
   bool hasClipboardPermission = false;
+  // Shizuku binder 连接状态只表示服务是否可达，不等同于 Shizuku 授权状态。
+  bool? shizukuBinderAvailable;
   var startedPip = false;
   final controller = TextEditingController();
+
+  /// 展示 Shizuku binder 当前连接状态。
+  String get shizukuBinderStatusText {
+    final available = shizukuBinderAvailable;
+    if (available == null) return "unknown";
+    return available ? "available" : "unavailable";
+  }
 
   @override
   void initState() {
@@ -123,6 +132,7 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text('Current environment: ${env.name}, Status: $isGranted'),
+                        Text('Shizuku binder: $shizukuBinderStatusText (connectivity only, not permission)'),
                         Padding(
                           padding: const EdgeInsets.only(left: 10, right: 10),
                           child: Row(
@@ -490,6 +500,15 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
     setState(() {
       env = environment;
       this.isGranted = isGranted;
+    });
+  }
+
+  @override
+  void onShizukuBinderStatusChanged(bool available) {
+    debugPrint("Shizuku binder available: $available");
+    setState(() {
+      // binder 可用只代表 Shizuku 服务可连接，是否授权仍需通过 checkPermission 判断。
+      shizukuBinderAvailable = available;
     });
   }
 
