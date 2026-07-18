@@ -1,3 +1,14 @@
+## 1.3.3
+* Android 新增：无障碍权限请求支持 `autoGrant` 参数，可通过 Shizuku/root 自动授权。
+* Android 修复：增强无障碍权限检测，降低不同 ROM 设置格式导致的误判。
+* Android 修复：切换 Shizuku/root 工作模式时重建特权命令与剪贴板来源服务，避免复用旧后端。
+* Android 修复：无障碍自动授权命令异常时明确返回失败，方便上层回退到系统设置页。
+---
+* Android feat: Adds an `autoGrant` option for accessibility requests through Shizuku/root.
+* Android fix: Improves accessibility permission checks to avoid false negatives on ROM-specific setting formats.
+* Android fix: Rebuilds privileged command and clipboard source services after switching between Shizuku/root modes.
+* Android fix: Returns a clear failure when accessibility auto-grant commands fail, allowing callers to fall back to system settings.
+
 ## 1.3.2
 * Android 修复：Shizuku binder 断开时安全清理本地状态，避免继续调用失效的 user service。
 * Android 新增：提供 Shizuku binder 可用/断开状态回调，并与权限请求结果回调区分。

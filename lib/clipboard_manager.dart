@@ -78,6 +78,8 @@ const kRequestClipboardPermission = "requestClipboardPermission";
 const kExecutePrivilegedCommand = "executePrivilegedCommand";
 const kStartPip = "startPip";
 const kStopPIP = "stopPIP";
+const kAutoGrant = "autoGrant";
+const kEnv = "env";
 
 class ClipboardManager {
   final _channel = const MethodChannel(kChannelName);
@@ -130,7 +132,7 @@ class ClipboardManager {
       return true;
     }());
     if (env != null) {
-      args["env"] = env.name;
+      args[kEnv] = env.name;
       if (env == EnvironmentType.none) {
         return Future(() => false);
       }
@@ -163,14 +165,14 @@ class ClipboardManager {
   ///Check if there is permission (only Android/IOS)
   Future<bool> checkPermission(EnvironmentType env) {
     if (!Platform.isAndroid && !Platform.isIOS) return Future.value(false);
-    final args = {"env": env.name};
+    final args = {kEnv: env.name};
     return _channel.invokeMethod<bool>(kCheckPermission, args).then((value) => value ?? false);
   }
 
   ///request permission (only Android/IOS)
   Future<void> requestPermission(EnvironmentType env) {
     if (!Platform.isAndroid && !Platform.isIOS) return Future.value();
-    final args = {"env": env.name};
+    final args = {kEnv: env.name};
     return _channel.invokeMethod(kRequestPermission, args);
   }
 
@@ -266,10 +268,16 @@ class ClipboardManager {
   }
 
   /// Request accessibility permission.
-  /// Accessibility permission is used to monitor changes in the top activity to determine which app the content was copied from.
-  Future<void> requestAccessibility() async {
-    if (!Platform.isAndroid) return;
-    return _channel.invokeMethod<void>(kRequestAccessibility, {});
+  ///
+  /// Accessibility permission is used to monitor changes in the top activity to
+  /// determine which app the content was copied from. When [autoGrant] is true,
+  /// Android tries to enable the accessibility service through the current
+  /// privileged backend; otherwise it opens the system accessibility settings page.
+  Future<bool> requestAccessibility({bool autoGrant = false}) async {
+    if (!Platform.isAndroid) return false;
+    return _channel.invokeMethod<bool?>(kRequestAccessibility, {
+      kAutoGrant: autoGrant,
+    }).then((res) => res ?? false);
   }
 
   /// Checks whether the app currently has clipboard permission on Android.

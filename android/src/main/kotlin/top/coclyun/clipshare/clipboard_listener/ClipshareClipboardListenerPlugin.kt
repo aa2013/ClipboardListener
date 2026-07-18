@@ -1,6 +1,7 @@
 package top.coclyun.clipshare.clipboard_listener
 
 import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.AccessibilityServiceInfo
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.app.ActivityManager
@@ -17,6 +18,7 @@ import android.os.Build
 import android.os.IBinder
 import android.provider.Settings
 import android.util.Log
+import android.view.accessibility.AccessibilityManager
 import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
@@ -72,6 +74,10 @@ const val CHECK_ACCESSIBILITY = "checkAccessibility"
 const val REQUEST_ACCESSIBILITY = "requestAccessibility"
 const val EXECUTE_PRIVILEGED_COMMAND = "executePrivilegedCommand"
 const val COPY = "copy"
+const val ARG_ENV = "env"
+const val ARG_AUTO_GRANT = "autoGrant"
+const val SETTINGS_NULL_VALUE = "null"
+const val ACCESSIBILITY_SERVICE_SEPARATOR = ":"
 
 /** ClipboardListenerPlugin */
 class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
@@ -192,10 +198,11 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
     }
 
     /**
-     * 注册 Shizuku binder 生命周期监听。
+     * Registers Shizuku binder lifecycle listeners.
      *
-     * binder 可用只表示 Shizuku 服务已经可以连接，不代表当前应用已经获得 Shizuku 授权。
-     * 使用 sticky listener 是为了在 Dart 侧订阅后，如果 binder 已经可用，也能立即收到一次状态回调。
+     * Binder availability only means the Shizuku service is reachable, not that
+     * this app has Shizuku permission. The sticky listener emits the current
+     * binder state immediately after Dart subscribes.
      */
     private fun startShizukuBinderObserver() {
         if (observingShizukuBinder) {
@@ -213,7 +220,7 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
     }
 
     /**
-     * 移除 Shizuku binder 监听，避免 Flutter 引擎销毁后继续向失效 channel 发送事件。
+     * Removes Shizuku binder listeners when the Flutter engine is detached.
      */
     private fun stopShizukuBinderObserver() {
         if (!observingShizukuBinder) return
@@ -228,9 +235,10 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
     }
 
     /**
-     * 将 Shizuku binder 状态通知给 Dart 层。
+     * Notifies Dart about Shizuku binder availability.
      *
-     * 该事件只承载服务可连接性，权限请求结果仍由 onPermissionStatusChanged 单独通知。
+     * This event only reports service connectivity; permission results still use
+     * onPermissionStatusChanged.
      */
     private fun notifyShizukuBinderStatusChanged(available: Boolean) {
         lastShizukuBinderAvailable = available
@@ -242,9 +250,10 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
     }
 
     /**
-     * 判断 Shizuku binder 是否仍可用。
+     * Checks whether the Shizuku binder is still reachable.
      *
-     * 该方法只用于插件内部防御，不向 Dart 暴露主动查询能力。
+     * This is an internal defensive check and is not exposed as an active Dart
+     * query API.
      */
     private fun isShizukuBinderAvailable(): Boolean {
         return try {
@@ -255,10 +264,10 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
     }
 
     /**
-     * Shizuku 断开或授权被撤销后的统一收口。
+     * Clears local state after Shizuku disconnects or permission is revoked.
      *
-     * 此时远端 user service 可能已经失效，不能再调用 destroy、exit、unbind 等依赖
-     * live binder 的 API，只清理本地引用并把状态通知给 Dart。
+     * Remote user services may already be invalid, so this path avoids calling
+     * APIs that require a live binder and only notifies Dart about availability.
      */
     fun handleShizukuUnavailable(reason: String) {
         Log.w(TAG, "Shizuku unavailable: $reason")
@@ -273,10 +282,10 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
     }
 
     private fun onStartListeningCalled(call: MethodCall, result: Result) {
-        currentEnv = getCurrentEnvironment()
-        Log.d(TAG, "currentEnv $currentEnv")
+        val detectedEnv = getCurrentEnvironment()
+        Log.d(TAG, "detectedEnv $detectedEnv")
         ClipboardListener.instance.addObserver(this)
-        val envStr = call.argument<String>("env")
+        val envStr = call.argument<String>(ARG_ENV)
         val wayStr = call.argument<String>("way")
         var env: EnvironmentType? = null
         var way: ClipboardListeningWay? = null
@@ -365,8 +374,13 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
         }
         //endregion
 
-        val res = startListeningClipboard(env, way)
-        startClipboardSourceService(env)
+        val targetEnv = env ?: detectedEnv
+        switchPrivilegedEnvironmentIfNeeded(targetEnv)
+        currentEnv = targetEnv
+        Log.d(TAG, "targetEnv $targetEnv")
+
+        val res = startListeningClipboard(targetEnv, way)
+        startClipboardSourceService(targetEnv)
         result.success(res)
     }
 
@@ -401,7 +415,7 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
     }
 
     private fun onCheckPermissionCalled(call: MethodCall, result: Result) {
-        val envName = call.argument<String>("env")
+        val envName = call.argument<String>(ARG_ENV)
         try {
             val env = EnvironmentType.valueOf(envName!!)
             val hasPermission = when (env) {
@@ -416,7 +430,7 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
     }
 
     private fun onRequestPermissionCalled(call: MethodCall, result: Result) {
-        val envName = call.argument<String>("env")
+        val envName = call.argument<String>(ARG_ENV)
         val env = EnvironmentType.valueOf(envName!!)
         when (env) {
             EnvironmentType.shizuku -> {
@@ -556,21 +570,155 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
         context: Context,
         service: Class<out AccessibilityService?>
     ): Boolean {
-        val prefString = Settings.Secure.getString(
+        return isAccessibilityServiceEnabledInSecureSettings(context, service) ||
+                isAccessibilityServiceEnabledInManager(context, service)
+    }
+
+    /**
+     * Checks secure settings with ComponentName parsing instead of raw string matching.
+     *
+     * Some ROMs store enabled accessibility services with shortened component
+     * names, so parsing avoids false negatives caused by formatting differences.
+     */
+    private fun isAccessibilityServiceEnabledInSecureSettings(
+        context: Context,
+        service: Class<out AccessibilityService?>
+    ): Boolean {
+        val enabledServices = Settings.Secure.getString(
             context.getContentResolver(),
             Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-        )
-        return prefString != null && prefString.contains(context.getPackageName() + "/" + service.getName())
+        ) ?: return false
+        val expected = ComponentName(context, service)
+        return parseEnabledAccessibilityComponents(enabledServices).any { it == expected }
+    }
+
+    /**
+     * Checks the AccessibilityManager enabled service list as a runtime fallback.
+     *
+     * This reflects the services Android actually considers enabled, which helps
+     * when secure settings are temporarily stale or formatted unexpectedly.
+     */
+    private fun isAccessibilityServiceEnabledInManager(
+        context: Context,
+        service: Class<out AccessibilityService?>
+    ): Boolean {
+        return try {
+            val manager = context.getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
+            val expected = ComponentName(context, service)
+            manager.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
+                .any { info ->
+                    val serviceInfo = info.resolveInfo.serviceInfo
+                    serviceInfo.packageName == expected.packageName &&
+                            serviceInfo.name == expected.className
+                }
+        } catch (e: Exception) {
+            Log.w(TAG, "check accessibility manager failed", e)
+            false
+        }
     }
 
     private fun requestAccessibility(call: MethodCall, result: Result) {
-        val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        context.startActivity(intent)
+        val autoGrant = call.argument<Boolean>(ARG_AUTO_GRANT) == true
+        if (!autoGrant) {
+            val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(intent)
+            result.success(false)
+            return
+        }
+        requestAccessibilityByPrivilegedCommand(result)
+    }
+
+    /**
+     * Enables the plugin accessibility service with Shizuku or root.
+     *
+     * Android stores enabled accessibility services as a colon-separated secure
+     * setting. This method preserves the existing list and appends the plugin
+     * service only when it is missing.
+     */
+    private fun requestAccessibilityByPrivilegedCommand(result: Result) {
+        if (!ensureClipboardCommandEnvironment()) {
+            result.success(false)
+            return
+        }
+        commandRunnerScope.launch {
+            try {
+                if (commandRunnerService == null) {
+                    initCommandRunnerService()
+                    waitCommandRunnerService()
+                }
+                val service = commandRunnerService
+                if (service == null) {
+                    markCommandRunnerUnavailable("accessibility command runner not initialized")
+                    result.success(false)
+                    return@launch
+                }
+
+                val serviceName = getAccessibilityServiceName(ActivityChangedService::class.java)
+                val currentServices = service.run(
+                    "settings get secure ${Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES}",
+                    currentEnv == EnvironmentType.root
+                ).trim()
+                val enabledServices = parseEnabledAccessibilityServices(currentServices)
+                val mergedServices = if (enabledServices.contains(serviceName)) {
+                    enabledServices
+                } else {
+                    enabledServices + serviceName
+                }
+                val mergedSetting = mergedServices.joinToString(ACCESSIBILITY_SERVICE_SEPARATOR)
+                service.run(
+                    "settings put secure ${Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES} ${shellQuote(mergedSetting)}",
+                    currentEnv == EnvironmentType.root
+                )
+                service.run(
+                    "settings put secure ${Settings.Secure.ACCESSIBILITY_ENABLED} 1",
+                    currentEnv == EnvironmentType.root
+                )
+                result.success(isAccessibilityServiceEnabled(context, ActivityChangedService::class.java))
+            } catch (e: Exception) {
+                Log.w(TAG, "auto grant accessibility failed", e)
+                result.success(false)
+            }
+        }
+    }
+
+    /**
+     * Builds the same component name Android stores in enabled_accessibility_services.
+     */
+    private fun getAccessibilityServiceName(service: Class<out AccessibilityService?>): String {
+        return "${context.packageName}/${service.name}"
+    }
+
+    /**
+     * Parses the secure setting value while ignoring empty and literal null values.
+     */
+    private fun parseEnabledAccessibilityServices(value: String): List<String> {
+        if (value.isBlank() || value == SETTINGS_NULL_VALUE) {
+            return emptyList()
+        }
+        return value.split(ACCESSIBILITY_SERVICE_SEPARATOR)
+            .map { it.trim() }
+            .filter { it.isNotEmpty() && it != SETTINGS_NULL_VALUE }
+            .distinct()
+    }
+
+    /**
+     * Parses enabled accessibility service entries into component names.
+     */
+    private fun parseEnabledAccessibilityComponents(value: String): List<ComponentName> {
+        return parseEnabledAccessibilityServices(value)
+            .mapNotNull { ComponentName.unflattenFromString(it) }
+    }
+
+    /**
+     * Quotes a value for the shell command sent through Shizuku or root.
+     */
+    private fun shellQuote(value: String): String {
+        return "'${value.replace("'", "'\"'\"'")}'"
     }
 
     private fun checkClipboardPermission(call: MethodCall, result: Result) {
-        //Android 10以前默认有权限
+        // Android versions before 10 grant clipboard access by default.
         if (currentEnv == EnvironmentType.androidPre10) {
             result.success(true)
             return;
@@ -579,35 +727,41 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
             result.success(false)
             return
         }
-        // 环境探测可能在上一步才识别出 Android 10 以下系统，此类系统不需要额外 AppOps 授权。
+        // Environment detection may have just resolved Android pre-10, which does not need AppOps grants.
         if (currentEnv == EnvironmentType.androidPre10) {
             result.success(true)
             return;
         }
         commandRunnerScope.launch {
-            if (commandRunnerService == null) {
-                initCommandRunnerService()
-                waitCommandRunnerService()
-            }
-            if (commandRunnerService != null) {
-                val res = commandRunnerService!!.run(
-                    "cmd appops get ${config.applicationId} | grep CLIPBOARD",
-                    currentEnv == EnvironmentType.root
-                )
-                Log.d(TAG, res)
-                if (res.contains("READ_CLIPBOARD: allow") && res.contains("WRITE_CLIPBOARD: allow")) {
-                    result.success(true)
+            try {
+                if (commandRunnerService == null) {
+                    initCommandRunnerService()
+                    waitCommandRunnerService()
+                }
+                if (commandRunnerService != null) {
+                    val res = commandRunnerService!!.run(
+                        "cmd appops get ${config.applicationId} | grep CLIPBOARD",
+                        currentEnv == EnvironmentType.root
+                    )
+                    Log.d(TAG, res)
+                    if (res.contains("READ_CLIPBOARD: allow") && res.contains("WRITE_CLIPBOARD: allow")) {
+                        result.success(true)
+                    } else {
+                        result.success(false)
+                    }
                 } else {
+                    markCommandRunnerUnavailable("clipboard permission check command runner not initialized")
                     result.success(false)
                 }
-            } else {
-                result.error("commandRunnerService not init", null, null)
+            } catch (e: Exception) {
+                Log.w(TAG, "check clipboard permission failed", e)
+                result.success(false)
             }
         }
     }
 
     private fun requestClipboardPermission(call: MethodCall, result: Result) {
-        //Android 10以前默认有权限
+        // Android versions before 10 grant clipboard access by default.
         if (currentEnv == EnvironmentType.androidPre10) {
             result.success(null)
             return;
@@ -616,38 +770,43 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
             result.success(null)
             return
         }
-        // 环境探测可能在上一步才识别出 Android 10 以下系统，此类系统不需要执行授权命令。
+        // Environment detection may have just resolved Android pre-10, which does not need AppOps commands.
         if (currentEnv == EnvironmentType.androidPre10) {
             result.success(null)
             return;
         }
         commandRunnerScope.launch {
-            if (commandRunnerService == null) {
-                initCommandRunnerService()
-                waitCommandRunnerService()
-            }
-            if (commandRunnerService != null) {
-                commandRunnerService!!.run(
-                    "cmd appops set ${config.applicationId} WRITE_CLIPBOARD allow",
-                    currentEnv == EnvironmentType.root
-                )
-                commandRunnerService!!.run(
-                    "cmd appops set ${config.applicationId} READ_CLIPBOARD allow",
-                    currentEnv == EnvironmentType.root
-                )
+            try {
+                if (commandRunnerService == null) {
+                    initCommandRunnerService()
+                    waitCommandRunnerService()
+                }
+                if (commandRunnerService != null) {
+                    commandRunnerService!!.run(
+                        "cmd appops set ${config.applicationId} WRITE_CLIPBOARD allow",
+                        currentEnv == EnvironmentType.root
+                    )
+                    commandRunnerService!!.run(
+                        "cmd appops set ${config.applicationId} READ_CLIPBOARD allow",
+                        currentEnv == EnvironmentType.root
+                    )
+                } else {
+                    markCommandRunnerUnavailable("clipboard permission command runner not initialized")
+                }
                 result.success(null)
-            } else {
-                handleShizukuUnavailable("clipboard permission command runner not initialized")
+            } catch (e: Exception) {
+                Log.w(TAG, "request clipboard permission failed", e)
                 result.success(null)
             }
         }
     }
 
     /**
-     * 确保剪贴板 AppOps 命令执行前已经解析出可用工作环境。
+     * Resolves the privileged environment before clipboard AppOps commands run.
      *
-     * 设置页可能早于 startListening 调用剪贴板权限检查，此时 currentEnv 仍为空；
-     * 这里复用现有环境探测逻辑，避免因初始化顺序竞态把可用的 Shizuku/root 误判为无权限。
+     * Settings pages may check permissions before startListening initializes
+     * currentEnv, so this falls back to environment detection only when the
+     * clipboard listener has not selected a backend yet.
      */
     private fun ensureClipboardCommandEnvironment(): Boolean {
         if (currentEnv == null) {
@@ -660,26 +819,67 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
         return true
     }
 
+    /**
+     * Clears command runner state without assuming every failure belongs to Shizuku.
+     */
+    private fun markCommandRunnerUnavailable(reason: String) {
+        if (currentEnv == EnvironmentType.shizuku) {
+            handleShizukuUnavailable(reason)
+            return
+        }
+        Log.w(TAG, "Command runner unavailable: $reason, env=$currentEnv")
+        commandRunnerBinding = false
+        commandRunnerService = null
+    }
+
     private fun executePrivilegedCommand(call: MethodCall, result: Result) {
+        if (!ensureClipboardCommandEnvironment()) {
+            result.success(null)
+            return
+        }
         commandRunnerScope.launch {
-            if (commandRunnerService == null) {
-                initCommandRunnerService()
-                waitCommandRunnerService()
-            }
-            if (commandRunnerService != null) {
-                val res = commandRunnerService!!.run(
-                    call.argument<String>("command"),
-                    currentEnv == EnvironmentType.root
-                )
-                result.success(res)
-            } else {
-                handleShizukuUnavailable("privileged command runner not initialized")
+            try {
+                if (commandRunnerService == null) {
+                    initCommandRunnerService()
+                    waitCommandRunnerService()
+                }
+                if (commandRunnerService != null) {
+                    val res = commandRunnerService!!.run(
+                        call.argument<String>("command"),
+                        currentEnv == EnvironmentType.root
+                    )
+                    result.success(res)
+                } else {
+                    markCommandRunnerUnavailable("privileged command runner not initialized")
+                    result.success(null)
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "execute privileged command failed", e)
                 result.success(null)
             }
         }
     }
 
     //endregion
+
+    /**
+     * Rebuilds privileged helpers when the app switches between Shizuku/root modes.
+     *
+     * Both command runner and clipboard source helpers follow currentEnv, which
+     * is selected by startListening. Switching the listener backend therefore
+     * tears down any helper created for the previous backend.
+     */
+    private fun switchPrivilegedEnvironmentIfNeeded(targetEnv: EnvironmentType?) {
+        if (targetEnv == null || targetEnv == currentEnv) {
+            return
+        }
+        if (commandRunnerService != null || commandRunnerBinding) {
+            destroyCommandRunnerService()
+        }
+        if (latestWriteClipboardPkgService != null) {
+            stopClipboardSourceService()
+        }
+    }
 
     @Synchronized
     private fun initCommandRunnerService() {
@@ -688,6 +888,10 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
         }
         if (currentEnv == EnvironmentType.root && commandRunnerService == null) {
             commandRunnerService = CommandRunnerService()
+            return
+        }
+        if (currentEnv != EnvironmentType.shizuku) {
+            markCommandRunnerUnavailable("command runner requires Shizuku or root, env=$currentEnv")
             return
         }
         if (!checkShizukuPermission()) {
@@ -883,6 +1087,13 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
         clipboardSourceServiceConn = object : ServiceConnection {
             private var service: ILatestWriteClipboardPkgService? = null
             override fun onServiceConnected(name: ComponentName, binder: IBinder) {
+                if (currentEnv != EnvironmentType.shizuku) {
+                    try {
+                        ILatestWriteClipboardPkgService.Stub.asInterface(binder)?.destroy()
+                    } catch (_: Exception) {
+                    }
+                    return
+                }
                 if (service != null) {
                     try {
                         service?.destroy()

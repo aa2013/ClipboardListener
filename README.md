@@ -34,7 +34,7 @@
 
 ```yaml
 dependencies:
-  clipshare_clipboard_listener: ^1.3.2
+  clipshare_clipboard_listener: ^1.3.3
 ```
 
 ### 用法
@@ -207,7 +207,7 @@ iOS 需要在 `info.plist` 中增加画中画支持
 | getShizukuVersion             | 获取Shizuku版本                                               | ✔️      | ✖️      | ✖️    | ✖️    | ✖️  |
 | getLatestWriteClipboardSource | 获取最近一次写入剪贴板的应用信息（无需无障碍，通过dumpsys，需要Shizuku或Root权限）        | ✔️      | ✖️      | ✖️    | ✖️    | ✖️  |
 | checkAccessibility            | 检查无障碍权限，如无该权限，Andorid系统下`onClipboardChanged`的来源信息为 `null` | ✔️      | ✖️      | ✖️    | ✖️    | ✖️  |
-| requestAccessibility          | 请求无障碍权限                                                   | ✔️      | ✖️      | ✖️    | ✖️    | ✖️  |
+| requestAccessibility          | 请求无障碍权限，默认跳转系统设置；传入 `autoGrant: true` 时尝试通过当前 Shizuku/root 工作模式自动授权 | ✔️      | ✖️      | ✖️    | ✖️    | ✖️  |
 | checkClipboardPermission      | 检查剪贴板权限                                                   | ✔️      | ✖️      | ✖️    | ✖️    | ✖️  |
 | requestClipboardPermission    | 请求并修改剪贴板权限（需要 Shizuku 或 root）                             | ✔️      | ✖️      | ✖️    | ✖️    | ✖️  |
 | executePrivilegedCommand      | 执行特权命令（需要 Shizuku 或 root）                                  | ✔️      | ✖️      | ✖️    | ✖️    | ✖️  |

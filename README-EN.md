@@ -37,7 +37,7 @@ Add this to your package's `pubspec.yaml` file:
 
 ```yaml
 dependencies:
-  clipshare_clipboard_listener: ^1.3.2
+  clipshare_clipboard_listener: ^1.3.3
 ```
 
 ### Usage
@@ -209,7 +209,7 @@ iOS requires adding Picture-in-Picture support in `Info.plist`.
 | getShizukuVersion             | Get the Shizuku version                                                                                                          | ✔️      | ✖️      | ✖️    | ✖️    | ✖️  |
 | getLatestWriteClipboardSource | Get the latest app that wrote to the clipboard (requires Shizuku or Root)                                                        | ✔️      | ✖️      | ✖️    | ✖️    | ✖️  |
 | checkAccessibility            | Check accessibility permissions (required for clipboard source info on Android)                                                  | ✔️      | ✖️      | ✖️    | ✖️    | ✖️  |
-| requestAccessibility          | Request accessibility permissions                                                                                                | ✔️      | ✖️      | ✖️    | ✖️    | ✖️  |
+| requestAccessibility          | Request accessibility permissions. Opens system settings by default; `autoGrant: true` tries auto grant with the current Shizuku/root mode | ✔️      | ✖️      | ✖️    | ✖️    | ✖️  |
 | checkClipboardPermission      | Check clipboard permission                                                                                                       | ✔️      | ✖️      | ✖️    | ✖️    | ✖️  |
 | requestClipboardPermission    | Request and modify clipboard permission (requires Shizuku or root)                                                               | ✔️      | ✖️      | ✖️    | ✖️    | ✖️  |
 | executePrivilegedCommand      | Execute privileged commands (requires Shizuku or root)                                                                           | ✔️      | ✖️      | ✖️    | ✖️    | ✖️  |
