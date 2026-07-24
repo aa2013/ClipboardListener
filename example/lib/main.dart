@@ -589,7 +589,7 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
     await hotKeyManager.register(
       key,
       keyDownHandler: (hotKey) async {
-        await clipboardManager.storeCurrentWindowHwnd();
+        // The plugin tracks the previous foreground desktop window automatically.
         //createWindow里面的参数必须传
         final window = await DesktopMultiWindow.createWindow('{}');
         window

@@ -196,8 +196,7 @@ iOS 需要在 `info.plist` 中增加画中画支持
 | getSelectedFiles              | 获取资源管理器中选择的文件                                             | ✖️      | ✔️      | ✖️    | ✖️    | ✖️  |
 | isEnableExcludeFormat         | 是否接收排除格式                                                  | ✖️      | ✔️      | ✖️    | ✖️    | ✖️  |
 | setExcludeFormatEnabled       | 设置是否接收排除格式                                                | ✖️      | ✔️      | ✖️    | ✖️    | ✖️  |
-| storeCurrentWindowHwnd        | 存储当前窗体的句柄                                                 | ✖️      | ✔️      | ✔️    | ✔️    | ✖️  |
-| pasteToPreviousWindow         | 粘贴到前一个窗体中（需要在复制前先调用`storeCurrentWindowHwnd`）              | ✖️      | ✔️      | ✔️    | ✔️    | ✖️  |
+| pasteToPreviousWindow         | 粘贴到自动记录的上一个前台窗体中（macOS 为应用级别，Linux 仅支持 X11；Wayland 不支持激活前台窗体） | ✖️      | ✔️      | ✔️    | ✔️    | ✖️  |
 | setTempFileDir                | 设置临时文件目录，复制图片后会将文件暂存到该路径下，默认为当前程序路径下                      | ✖️      | ✔️      | ✔️    | ✖️    | ✖️  |
 | onPermissionStatusChanged     | 权限状态改变事件，当前只有Android有效                                    | ✔️      | ✖️      | ✖️    | ✖️    | ✖️  |
 | onShizukuBinderStatusChanged  | Shizuku binder 可用/断开事件，仅表示服务连接状态，不代表已授权                     | ✔️      | ✖️      | ✖️    | ✖️    | ✖️  |

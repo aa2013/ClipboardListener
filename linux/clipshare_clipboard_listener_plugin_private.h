@@ -14,14 +14,12 @@ const char *kStartListening = "startListening";
 const char *kStopListening = "stopListening";
 const char *kCheckIsRunning = "checkIsRunning";
 const char *kCopy = "copy";
-const char *kStoreCurrentWindowHwnd = "storeCurrentWindowHwnd";
 const char *kPasteToPreviousWindow = "pasteToPreviousWindow";
 
 static FlMethodResponse *startListening(ClipshareClipboardListenerPlugin *self, FlValue *args);
 static FlMethodResponse *stopListening(ClipshareClipboardListenerPlugin *self, FlValue *args);
 static FlMethodResponse *checkIsRunning(ClipshareClipboardListenerPlugin *self, FlValue *args);
 static FlMethodResponse *copyData(ClipshareClipboardListenerPlugin *self, const gchar *type, const gchar *content);
-static FlMethodResponse *storeCurrentWindowHwnd(ClipshareClipboardListenerPlugin *self);
 static FlMethodResponse *pasteToPreviousWindow(ClipshareClipboardListenerPlugin *self, int64_t delayMs);
 static void sendClipboardData(ClipshareClipboardListenerPlugin *plugin, const gchar *type, const gchar *content);
 static void onWaylandClipboardChanged(GObject *owner, const gchar *type, const gchar *content);

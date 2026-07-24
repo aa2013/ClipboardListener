@@ -6,11 +6,14 @@
 
 #include <flutter_linux/flutter_linux.h>
 #include <gtk/gtk.h>
+#include <gdk/gdkx.h>
+#include <X11/Xatom.h>
 #include <gdk-pixbuf/gdk-pixbuf.h>
 #include <sys/utsname.h>
 #include <cstring>
 #include <string>
 #include <glib.h>
+#include <unistd.h>
 
 #define CLIPSHARE_CLIPBOARD_LISTENER_PLUGIN(obj)                                     \
   (G_TYPE_CHECK_INSTANCE_CAST((obj), clipshare_clipboard_listener_plugin_get_type(), \
@@ -23,8 +26,12 @@ struct _ClipshareClipboardListenerPlugin
   GtkClipboard *clipboard;
   gulong clipboard_handler_id;
   WaylandClipboardListener *wayland_listener;
+  GdkWindow *x11_root_window;
+  Window current_window;
+  Window previous_window;
   bool running = false;
   bool ignoreNextCopy = false;
+  bool foreground_filter_installed = false;
 };
 
 G_DEFINE_TYPE(ClipshareClipboardListenerPlugin, clipshare_clipboard_listener_plugin, g_object_get_type())
@@ -38,6 +45,11 @@ static void onWaylandClipboardChanged(
         GObject *owner,
         const gchar *type,
         const gchar *content);
+static guint getWindowProcessId(Window window);
+static void updateForegroundWindow(ClipshareClipboardListenerPlugin *self, Window window);
+static GdkFilterReturn onX11RootWindowEvent(GdkXEvent *xevent, GdkEvent *event, gpointer data);
+static void startForegroundWindowListener(ClipshareClipboardListenerPlugin *self);
+static void stopForegroundWindowListener(ClipshareClipboardListenerPlugin *self);
 // Called when a method call is received from Flutter.
 static void clipshare_clipboard_listener_plugin_handle_method_call(
     ClipshareClipboardListenerPlugin *self,
@@ -68,10 +80,6 @@ static void clipshare_clipboard_listener_plugin_handle_method_call(
     const gchar *content = fl_value_get_string(content_value);
     response = copyData(self, type, content);
   }
-  else if(strcmp(method, kStoreCurrentWindowHwnd) == 0)
-  {
-      response = storeCurrentWindowHwnd(self);
-  }
   else if(strcmp(method, kPasteToPreviousWindow) == 0)
   {
       FlValue *key_delay_ms_value = fl_value_lookup_string(args, "keyDelayMs");
@@ -89,6 +97,7 @@ static void clipshare_clipboard_listener_plugin_handle_method_call(
 static void clipshare_clipboard_listener_plugin_dispose(GObject *object)
 {
   ClipshareClipboardListenerPlugin *self = CLIPSHARE_CLIPBOARD_LISTENER_PLUGIN(object);
+  stopForegroundWindowListener(self);
   wayland_clipboard_listener_free(self->wayland_listener);
   self->wayland_listener = nullptr;
   if (self->clipboard && self->clipboard_handler_id != 0) {
@@ -110,8 +119,12 @@ static void clipshare_clipboard_listener_plugin_init(ClipshareClipboardListenerP
   self->clipboard = nullptr;
   self->clipboard_handler_id = 0;
   self->wayland_listener = nullptr;
+  self->x11_root_window = nullptr;
+  self->current_window = 0;
+  self->previous_window = 0;
   self->running = false;
   self->ignoreNextCopy = false;
+  self->foreground_filter_installed = false;
 }
 
 static void method_call_cb(FlMethodChannel *channel, FlMethodCall *method_call,
@@ -156,6 +169,7 @@ static gboolean ensureWaylandClipboardListener(ClipshareClipboardListenerPlugin 
   wayland_clipboard_listener_free(self->wayland_listener);
   self->wayland_listener = wayland_clipboard_listener_new(G_OBJECT(self), onWaylandClipboardChanged);
   if (wayland_clipboard_listener_is_available(self->wayland_listener)) {
+    stopForegroundWindowListener(self);
     disconnectGtkClipboardListener(self);
     return TRUE;
   }
@@ -314,6 +328,9 @@ static FlMethodResponse *startListening(ClipshareClipboardListenerPlugin *self, 
   self->running = true;
   if (!ensureWaylandClipboardListener(self)) {
     ensureGtkClipboardListener(self);
+    startForegroundWindowListener(self);
+  } else {
+    debug_printf("Wayland does not expose a stable global foreground window handle; pasteToPreviousWindow is limited to X11.");
   }
   g_autoptr(FlValue) result = fl_value_new_bool(true);
   return FL_METHOD_RESPONSE(fl_method_success_response_new(result));
@@ -322,6 +339,7 @@ static FlMethodResponse *startListening(ClipshareClipboardListenerPlugin *self, 
 static FlMethodResponse *stopListening(ClipshareClipboardListenerPlugin *self, FlValue *args)
 {
   self->running = false;
+  stopForegroundWindowListener(self);
   wayland_clipboard_listener_free(self->wayland_listener);
   self->wayland_listener = nullptr;
   disconnectGtkClipboardListener(self);
@@ -388,18 +406,94 @@ static FlMethodResponse *copyData(ClipshareClipboardListenerPlugin *self, const 
   g_autoptr(FlValue) result = fl_value_new_bool(success);
   return FL_METHOD_RESPONSE(fl_method_success_response_new(result));
 }
-static Window previousWindow = 0;
-
-static FlMethodResponse *storeCurrentWindowHwnd(ClipshareClipboardListenerPlugin *self)
+static guint getWindowProcessId(Window window)
 {
-    previousWindow = getWindowId();
-    g_autoptr(FlValue) result = fl_value_new_bool(previousWindow != 0);
-    return FL_METHOD_RESPONSE(fl_method_success_response_new(result));
+    if (window == 0) {
+        return 0;
+    }
+    Display *display = XOpenDisplay(nullptr);
+    if (!display) {
+        return 0;
+    }
+    Atom pid_atom = XInternAtom(display, "_NET_WM_PID", True);
+    Atom type;
+    int format;
+    unsigned long nitems, bytes_after;
+    unsigned char *prop = nullptr;
+    guint pid = 0;
+    if (pid_atom != None && XGetWindowProperty(display, window, pid_atom, 0, 1, False, XA_CARDINAL,
+                           &type, &format, &nitems, &bytes_after, &prop) == Success && prop) {
+        pid = *(guint *)prop;
+        XFree(prop);
+    }
+    XCloseDisplay(display);
+    return pid;
 }
 
-static gboolean activateAndPaste(int64_t dealyMs) {
+static void updateForegroundWindow(ClipshareClipboardListenerPlugin *self, Window window)
+{
+    if (window == 0 || window == self->current_window) {
+        return;
+    }
+    if (getWindowProcessId(window) == getpid()) {
+        if (self->current_window != 0) {
+            self->previous_window = self->current_window;
+        }
+        self->current_window = 0;
+        return;
+    }
+    if (self->current_window != 0) {
+        self->previous_window = self->current_window;
+    }
+    self->current_window = window;
+}
+
+static GdkFilterReturn onX11RootWindowEvent(GdkXEvent *xevent, GdkEvent *event, gpointer data)
+{
+    XEvent *x_event = static_cast<XEvent *>(xevent);
+    ClipshareClipboardListenerPlugin *self = CLIPSHARE_CLIPBOARD_LISTENER_PLUGIN(data);
+    if (x_event->type == PropertyNotify) {
+        Display *display = GDK_DISPLAY_XDISPLAY(gdk_display_get_default());
+        Atom active_atom = XInternAtom(display, "_NET_ACTIVE_WINDOW", True);
+        if (active_atom != None && x_event->xproperty.atom == active_atom) {
+            updateForegroundWindow(self, getWindowId());
+        }
+    }
+    return GDK_FILTER_CONTINUE;
+}
+
+static void startForegroundWindowListener(ClipshareClipboardListenerPlugin *self)
+{
+    if (self->foreground_filter_installed || is_wayland()) {
+        return;
+    }
+    GdkDisplay *display = gdk_display_get_default();
+    if (!display || !GDK_IS_X11_DISPLAY(display)) {
+        return;
+    }
+    self->current_window = getWindowId();
+    self->x11_root_window = gdk_get_default_root_window();
+    if (!self->x11_root_window) {
+        return;
+    }
+    gdk_window_add_filter(self->x11_root_window, onX11RootWindowEvent, self);
+    XSelectInput(GDK_DISPLAY_XDISPLAY(display), GDK_WINDOW_XID(self->x11_root_window), PropertyChangeMask);
+    XFlush(GDK_DISPLAY_XDISPLAY(display));
+    self->foreground_filter_installed = true;
+}
+
+static void stopForegroundWindowListener(ClipshareClipboardListenerPlugin *self)
+{
+    if (self->foreground_filter_installed && self->x11_root_window) {
+        gdk_window_remove_filter(self->x11_root_window, onX11RootWindowEvent, self);
+    }
+    self->foreground_filter_installed = false;
+    self->x11_root_window = nullptr;
+}
+
+static gboolean activateAndPaste(ClipshareClipboardListenerPlugin *self, int64_t dealyMs) {
     Display* display;
-    if(!activeWindow(previousWindow, &display)){
+    if(!activeWindow(self->previous_window, &display)){
         return false;
     }
     // 延迟等待窗口真正获得焦点
@@ -410,6 +504,6 @@ static gboolean activateAndPaste(int64_t dealyMs) {
 }
 static FlMethodResponse *pasteToPreviousWindow(ClipshareClipboardListenerPlugin *self, int64_t delayMs)
 {
-    g_autoptr(FlValue) result = fl_value_new_bool(activateAndPaste(delayMs));
+    g_autoptr(FlValue) result = fl_value_new_bool(activateAndPaste(self, delayMs));
     return FL_METHOD_RESPONSE(fl_method_success_response_new(result));
 }

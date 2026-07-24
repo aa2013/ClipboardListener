@@ -1,3 +1,8 @@
+## Next
+
+* Desktop change: Automatically tracks the previous foreground window/app for `pasteToPreviousWindow`; removed the public `storeCurrentWindowHwnd` API. Linux support is X11-only because Wayland does not expose global foreground window activation to regular clients.
+* 桌面端调整：`pasteToPreviousWindow` 会自动跟踪上一个前台窗口/应用，移除公开的 `storeCurrentWindowHwnd` API。Linux 仅支持 X11，Wayland 不向普通客户端提供全局前台窗口激活能力。
+
 ## 1.3.3
 * Android 新增：无障碍权限请求支持 `autoGrant` 参数，可通过 Shizuku/root 自动授权。
 * Android 修复：增强无障碍权限检测，降低不同 ROM 设置格式导致的误判。

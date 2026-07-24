@@ -55,7 +55,6 @@ const kCopy = "copy";
 
 //Windows
 const kGetSelectedFiles = "getSelectedFiles";
-const kStoreCurrentWindowHwnd = "storeCurrentWindowHwnd";
 const kPasteToPreviousWindow = "pasteToPreviousWindow";
 const kIsEnableExcludeFormat = "isEnableExcludeFormat";
 const kEnableExcludeFormat = "enableExcludeFormat";
@@ -198,12 +197,6 @@ class ClipboardManager {
     return _channel.invokeMethod<bool>(kCopy, args).then((value) => value ?? false);
   }
 
-  ///Save the hwnd of the current window and use it in conjunction with [pasteToPreviousWindow] method
-  Future<void> storeCurrentWindowHwnd() {
-    if (!Platform.isWindows && !Platform.isMacOS && !Platform.isLinux) return Future.value();
-    return _channel.invokeMethod(kStoreCurrentWindowHwnd);
-  }
-
   /// Sets whether to enable privacy format exclusion (ExcludeClipboardContentFromMonitorProcessing), only available on Windows.
   Future<void> setExcludeFormatEnabled(bool enable) {
     if (!Platform.isWindows) return Future.value();
@@ -217,9 +210,13 @@ class ClipboardManager {
     return _channel.invokeMethod(kIsEnableExcludeFormat).then((value) => value ?? false);
   }
 
-  ///send Ctrl + V to previous Window
-  ///Ensure [storeCurrentWindowHwnd] is called before pasting clipboard data into the previous window.
-  ///[keyDelayMs] The interval duration of each key, if the duration is too short, the combination key may not work properly
+  /// Sends the platform paste shortcut to the previously active desktop window.
+  ///
+  /// Desktop platforms track foreground window/app changes automatically while
+  /// listening is active. Linux support is limited to X11 because Wayland does
+  /// not expose a stable global foreground-window handle to regular clients.
+  ///
+  /// [keyDelayMs] The interval duration of each key, if the duration is too short, the combination key may not work properly
   Future<void> pasteToPreviousWindow([int keyDelayMs = 100]) {
     if (!Platform.isWindows && !Platform.isMacOS && !Platform.isLinux) return Future.value();
     if (keyDelayMs < 0) {

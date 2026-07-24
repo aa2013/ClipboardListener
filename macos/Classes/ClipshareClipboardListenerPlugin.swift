@@ -8,7 +8,6 @@ public class ClipshareClipboardListenerPlugin: NSObject, FlutterPlugin {
     private static let kStartListening = "startListening"
     private static let kStopListening = "stopListening"
     private static let kCheckIsRunning = "checkIsRunning"
-    private static let kStoreCurrentWindowHwnd = "storeCurrentWindowHwnd"
     private static let kPasteToPreviousWindow = "pasteToPreviousWindow"
     private static let kCopy = "copy"
     // Explicitly write PNG data so third-party clipboard managers keep the image type stable.
@@ -21,6 +20,7 @@ public class ClipshareClipboardListenerPlugin: NSObject, FlutterPlugin {
     private var timer: Timer?
     private var ignoreNextCopy = false
     private var currentApp: NSRunningApplication?
+    private var previousApp: NSRunningApplication?
 
     // 图片保存目录
     private let imageSavePath: String = {
@@ -44,8 +44,6 @@ public class ClipshareClipboardListenerPlugin: NSObject, FlutterPlugin {
             stopListening(result: result)
         case ClipshareClipboardListenerPlugin.kCheckIsRunning:
             checkIsRunning(result: result)
-        case ClipshareClipboardListenerPlugin.kStoreCurrentWindowHwnd:
-            storeCurrentWindowHwnd(result: result)
         case ClipshareClipboardListenerPlugin.kPasteToPreviousWindow:
             pasteToPreviousWindow(result: result)
         case ClipshareClipboardListenerPlugin.kCopy:
@@ -62,6 +60,7 @@ public class ClipshareClipboardListenerPlugin: NSObject, FlutterPlugin {
     }
 
     private func startListening(result: @escaping FlutterResult) {
+        observeForegroundAppChanges()
         timer = Timer.scheduledTimer(
             timeInterval: 0.1,
             target: self,
@@ -75,6 +74,11 @@ public class ClipshareClipboardListenerPlugin: NSObject, FlutterPlugin {
     private func stopListening(result: @escaping FlutterResult) {
         timer?.invalidate()
         timer = nil
+        NSWorkspace.shared.notificationCenter.removeObserver(
+            self,
+            name: NSWorkspace.didActivateApplicationNotification,
+            object: nil
+        )
         result(true)
     }
 
@@ -106,23 +110,50 @@ public class ClipshareClipboardListenerPlugin: NSObject, FlutterPlugin {
         result(success)
     }
 
-    private func storeCurrentWindowHwnd(result: @escaping FlutterResult){
-        let workspace = NSWorkspace.shared
-        guard let frontApp = workspace.frontmostApplication else {
-            result(false)
+    private func observeForegroundAppChanges() {
+        if currentApp == nil {
+            currentApp = NSWorkspace.shared.frontmostApplication
+        }
+        NSWorkspace.shared.notificationCenter.removeObserver(
+            self,
+            name: NSWorkspace.didActivateApplicationNotification,
+            object: nil
+        )
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self,
+            selector: #selector(self.onForegroundAppChanged(_:)),
+            name: NSWorkspace.didActivateApplicationNotification,
+            object: nil
+        )
+    }
+
+    @objc private func onForegroundAppChanged(_ notification: Notification) {
+        guard let app = notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else {
             return
         }
-        currentApp = frontApp
-        result(true)
+        if app.processIdentifier == ProcessInfo.processInfo.processIdentifier {
+            if let activeApp = currentApp {
+                previousApp = activeApp
+            }
+            currentApp = nil
+            return
+        }
+        if app.processIdentifier == currentApp?.processIdentifier {
+            return
+        }
+        if let activeApp = currentApp, activeApp.processIdentifier != ProcessInfo.processInfo.processIdentifier {
+            previousApp = activeApp
+        }
+        currentApp = app
     }
 
     private func pasteToPreviousWindow(result: @escaping FlutterResult){
-        if currentApp == nil{
+        guard let app = previousApp else {
             result(false)
             return
         }
         // 激活前台应用
-        currentApp!.activate(options: [.activateAllWindows])
+        app.activate(options: [.activateAllWindows])
         sendPasteShortcut()
         result(true)
     }
