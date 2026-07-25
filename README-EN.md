@@ -37,7 +37,7 @@ Add this to your package's `pubspec.yaml` file:
 
 ```yaml
 dependencies:
-  clipshare_clipboard_listener: ^1.3.3
+  clipshare_clipboard_listener: ^1.3.4
 ```
 
 ### Usage
