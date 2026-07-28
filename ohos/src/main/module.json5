@@ -1,0 +1,15 @@
+{
+  "module": {
+    "name": "clipshare_clipboard_listener",
+    "type": "har",
+    "deviceTypes": [
+      "default",
+      "tablet"
+    ],
+    "requestPermissions": [
+      {
+        "name": "ohos.permission.SYSTEM_FLOAT_WINDOW"
+      }
+    ]
+  }
+}

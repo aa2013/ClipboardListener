@@ -1,0 +1,21 @@
+{
+  "modelVersion": "5.1.0",
+  "name": "clipshare_clipboard_listener_example",
+  "version": "1.0.0",
+  "description": "Please describe the basic information.",
+  "main": "",
+  "author": "",
+  "license": "",
+  "dependencies": {},
+  "devDependencies": {
+    "@ohos/hypium": "1.0.6"
+  },
+  "overrides": {
+    "integration_test": "file:./har/integration_test.har",
+    "permission_handler_ohos": "file:./har/permission_handler_ohos.har",
+    "path_provider_ohos": "file:./har/path_provider_ohos.har",
+    "clipshare_clipboard_listener": "file:./har/clipshare_clipboard_listener.har",
+    "@ohos/flutter_module": "file:./entry",
+    "@ohos/flutter_ohos": "file:./har/flutter.har"
+  }
+}

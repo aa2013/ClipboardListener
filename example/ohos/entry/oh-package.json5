@@ -1,0 +1,15 @@
+{
+  "name": "entry",
+  "version": "1.0.0",
+  "description": "Please describe the basic information.",
+  "main": "",
+  "author": "",
+  "license": "",
+  "dependencies": {
+    "@ohos/flutter_ohos": "har/flutter.har",
+    "integration_test": "file:../har/integration_test.har",
+    "permission_handler_ohos": "file:../har/permission_handler_ohos.har",
+    "path_provider_ohos": "file:../har/path_provider_ohos.har",
+    "clipshare_clipboard_listener": "file:../har/clipshare_clipboard_listener.har"
+  }
+}

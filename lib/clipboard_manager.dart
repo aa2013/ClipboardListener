@@ -53,6 +53,13 @@ const kCheckIsRunning = "checkIsRunning";
 const kStopListening = "stopListening";
 const kCopy = "copy";
 
+//OHOS
+const kCheckOhosFloatingWindowPermission = "checkOhosFloatingWindowPermission";
+const kRequestOhosFloatingWindowPermission = "requestOhosFloatingWindowPermission";
+const kStartOhosFloatingWindow = "startOhosFloatingWindow";
+const kStopOhosFloatingWindow = "stopOhosFloatingWindow";
+const kCheckOhosFloatingWindowRunning = "checkOhosFloatingWindowRunning";
+
 //Windows
 const kGetSelectedFiles = "getSelectedFiles";
 const kPasteToPreviousWindow = "pasteToPreviousWindow";
@@ -159,6 +166,46 @@ class ClipboardManager {
   ///check listener running status
   Future<bool> checkIsRunning() {
     return _channel.invokeMethod<bool>(kCheckIsRunning).then((value) => value ?? false);
+  }
+
+  /// Checks whether OHOS has granted the floating-window permission.
+  ///
+  /// Only available on OHOS. Other platforms return false without invoking native code.
+  Future<bool> checkOhosFloatingWindowPermission() {
+    if (!Platform.isOhos) return Future.value(false);
+    return _channel.invokeMethod<bool>(kCheckOhosFloatingWindowPermission).then((value) => value ?? false);
+  }
+
+  /// Requests the OHOS floating-window permission used by background clipboard listening.
+  ///
+  /// Only available on OHOS. Other platforms return false without invoking native code.
+  Future<bool> requestOhosFloatingWindowPermission() {
+    if (!Platform.isOhos) return Future.value(false);
+    return _channel.invokeMethod<bool>(kRequestOhosFloatingWindowPermission).then((value) => value ?? false);
+  }
+
+  /// Starts the OHOS floating window used to keep clipboard listening user-visible in the background.
+  ///
+  /// Only available on OHOS. Other platforms return false without invoking native code.
+  Future<bool> startOhosFloatingWindow() {
+    if (!Platform.isOhos) return Future.value(false);
+    return _channel.invokeMethod<bool>(kStartOhosFloatingWindow).then((value) => value ?? false);
+  }
+
+  /// Stops the OHOS floating window if it is running.
+  ///
+  /// Only available on OHOS. Other platforms return true because stopping a non-existent window is a no-op.
+  Future<bool> stopOhosFloatingWindow() {
+    if (!Platform.isOhos) return Future.value(true);
+    return _channel.invokeMethod<bool>(kStopOhosFloatingWindow).then((value) => value ?? false);
+  }
+
+  /// Checks whether the OHOS floating window is currently running.
+  ///
+  /// Only available on OHOS. Other platforms return false without invoking native code.
+  Future<bool> checkOhosFloatingWindowRunning() {
+    if (!Platform.isOhos) return Future.value(false);
+    return _channel.invokeMethod<bool>(kCheckOhosFloatingWindowRunning).then((value) => value ?? false);
   }
 
   ///Check if there is permission (only Android/IOS)

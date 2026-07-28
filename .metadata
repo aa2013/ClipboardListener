@@ -4,7 +4,7 @@
 # This file should be version controlled and should not be manually edited.
 
 version:
-  revision: "b8962555571d8c170cff8e76023ea7bf60e5ec4b"
+  revision: "c2adf95b00dd17a447aedde055ebabc0f23f91b1"
   channel: "[user-branch]"
 
 project_type: plugin
@@ -13,23 +13,26 @@ project_type: plugin
 migration:
   platforms:
     - platform: root
-      create_revision: b8962555571d8c170cff8e76023ea7bf60e5ec4b
-      base_revision: b8962555571d8c170cff8e76023ea7bf60e5ec4b
+      create_revision: c2adf95b00dd17a447aedde055ebabc0f23f91b1
+      base_revision: c2adf95b00dd17a447aedde055ebabc0f23f91b1
     - platform: android
-      create_revision: b8962555571d8c170cff8e76023ea7bf60e5ec4b
-      base_revision: b8962555571d8c170cff8e76023ea7bf60e5ec4b
+      create_revision: c2adf95b00dd17a447aedde055ebabc0f23f91b1
+      base_revision: c2adf95b00dd17a447aedde055ebabc0f23f91b1
     - platform: ios
-      create_revision: b8962555571d8c170cff8e76023ea7bf60e5ec4b
-      base_revision: b8962555571d8c170cff8e76023ea7bf60e5ec4b
+      create_revision: c2adf95b00dd17a447aedde055ebabc0f23f91b1
+      base_revision: c2adf95b00dd17a447aedde055ebabc0f23f91b1
     - platform: linux
-      create_revision: b8962555571d8c170cff8e76023ea7bf60e5ec4b
-      base_revision: b8962555571d8c170cff8e76023ea7bf60e5ec4b
+      create_revision: c2adf95b00dd17a447aedde055ebabc0f23f91b1
+      base_revision: c2adf95b00dd17a447aedde055ebabc0f23f91b1
     - platform: macos
-      create_revision: b8962555571d8c170cff8e76023ea7bf60e5ec4b
-      base_revision: b8962555571d8c170cff8e76023ea7bf60e5ec4b
+      create_revision: c2adf95b00dd17a447aedde055ebabc0f23f91b1
+      base_revision: c2adf95b00dd17a447aedde055ebabc0f23f91b1
     - platform: windows
-      create_revision: b8962555571d8c170cff8e76023ea7bf60e5ec4b
-      base_revision: b8962555571d8c170cff8e76023ea7bf60e5ec4b
+      create_revision: c2adf95b00dd17a447aedde055ebabc0f23f91b1
+      base_revision: c2adf95b00dd17a447aedde055ebabc0f23f91b1
+    - platform: ohos
+      create_revision: c2adf95b00dd17a447aedde055ebabc0f23f91b1
+      base_revision: c2adf95b00dd17a447aedde055ebabc0f23f91b1
 
   # User provided section
 

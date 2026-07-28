@@ -20,6 +20,22 @@
 | macOS   | ✔️ 完全支持                                   |
 | iOS     | ✔️ iOS14+ 支持基本的监听功能，但需要依赖画中画              |
 
+## OHOS 构建说明
+
+`flutter-hvigor-plugin` 是社区 `flutter-oh` 接入 OHOS Hvigor 构建系统的桥接插件，用于让 Hvigor 识别 Flutter 产物、插件 HAR 和相关打包任务。
+
+如果构建时在 Hvigor 初始化阶段遇到：
+
+```text
+Cannot find module 'flutter-hvigor-plugin'
+```
+
+通常是因为部分社区 Flutter OHOS SDK 模板引用了该 Node 插件，但当前 SDK 内对应目录缺少 Node 可解析的包入口。
+
+当前示例工程采用兼容处理：`example/ohos/hvigorfile.ts` 只保留 `@ohos/hvigor-ohos-plugin` 的 `appTasks`，并设置 `plugins: []`。这样 `flutter-oh` 会走旧版/Dart builder 路径，先生成 Flutter/HAR 产物，再交给 Hvigor 打包 HAP。
+
+同时需要保留 `oh-package.json5` 中的 `har/*.har` 依赖或 `overrides`，否则 ArkTS 编译阶段可能找不到 `@ohos/flutter_ohos` 或插件 HAR。后续社区 SDK 修复 `flutter-hvigor-plugin` 包入口后，可以恢复模板默认构建路径。
+
 ## 剪贴板内容类型
 
 | 文本 | 图片 |

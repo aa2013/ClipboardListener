@@ -23,6 +23,22 @@ This project was extracted from [ClipShare](https://github.com/aa2013/ClipShare)
 | macOS    | ✔️ Fully supported                                                    |
 | iOS      | ✔️ iOS14+ Basic support; needs PiP to monitor in background.          |
 
+## OHOS Build Notes
+
+`flutter-hvigor-plugin` is the bridge used by the community `flutter-oh` toolchain to connect Flutter builds with the OHOS Hvigor build system. It lets Hvigor understand Flutter artifacts, plugin HAR files, and related packaging tasks.
+
+If the build fails during Hvigor initialization with:
+
+```text
+Cannot find module 'flutter-hvigor-plugin'
+```
+
+it usually means that the generated community Flutter OHOS template references this Node plugin, but the matching SDK directory does not contain a Node-resolvable package entry.
+
+The current example project uses a compatibility workaround: `example/ohos/hvigorfile.ts` keeps only `appTasks` from `@ohos/hvigor-ohos-plugin` and sets `plugins: []`. This lets `flutter-oh` use the legacy/Dart builder path to generate Flutter/HAR artifacts first, then leaves Hvigor to package the final HAP.
+
+The `har/*.har` dependencies or `overrides` in `oh-package.json5` must also be kept; otherwise ArkTS compilation may fail to resolve `@ohos/flutter_ohos` or plugin HAR modules. Once the community SDK provides a valid package entry for `flutter-hvigor-plugin`, the default template build path can be restored.
+
 ## Clipboard Content Types
 
 | Text | Image |
