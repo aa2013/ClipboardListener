@@ -43,3 +43,34 @@ enum ClipboardListeningWay {
     );
   }
 }
+
+enum PasteResult {
+  /// Paste was injected successfully.
+  success,
+
+  /// No eligible target window was found to receive the paste action.
+  noTargetWindow,
+
+  /// The target process could not be opened for inspection.
+  openTargetProcessFailed,
+
+  /// The target process was found, but its integrity level could not be inspected.
+  inspectTargetFailed,
+
+  /// The current process integrity level could not be inspected.
+  inspectSelfFailed,
+
+  /// The target window is running at a higher integrity level than this app.
+  targetIntegrityHigher,
+
+  /// The native side returned a result unknown to this Dart version.
+  unknown;
+
+  static PasteResult parse(String value) => PasteResult.values.firstWhere(
+        (e) => e.name == value,
+        orElse: () {
+          debugPrint("PasteResult '$value' unknown");
+          return PasteResult.unknown;
+        },
+      );
+}

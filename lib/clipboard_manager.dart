@@ -39,6 +39,13 @@ abstract mixin class ClipboardListener {
   /// [isGranted] When the Android system version is before Android 10, always return true
   void onPermissionStatusChanged(EnvironmentType environment, bool isGranted) {}
 
+  /// Called when the foreground window changes on the desktop. (Windows only)
+  ///
+  /// [isSelf] Whether the new foreground window belongs to this app process.
+  /// This is used to detect when the user switches to another app so the app
+  /// can react (e.g. auto-close the history popup).
+  void onForegroundChanged(bool isSelf) {}
+
   /// Called when the Shizuku binder connectivity changes. (Android only)
   ///
   /// [available] only means that the Shizuku service binder is reachable; it does not mean the app has Shizuku permission.
@@ -58,6 +65,7 @@ const kGetSelectedFiles = "getSelectedFiles";
 const kPasteToPreviousWindow = "pasteToPreviousWindow";
 const kIsEnableExcludeFormat = "isEnableExcludeFormat";
 const kEnableExcludeFormat = "enableExcludeFormat";
+const kOnForegroundChanged = "onForegroundChanged";
 
 //Desktop
 const kSetTempFileDir = "setTempFileDir";
@@ -215,15 +223,10 @@ class ClipboardManager {
   /// Desktop platforms track foreground window/app changes automatically while
   /// listening is active. Linux support is limited to X11 because Wayland does
   /// not expose a stable global foreground-window handle to regular clients.
-  ///
-  /// [keyDelayMs] The interval duration of each key, if the duration is too short, the combination key may not work properly
-  Future<void> pasteToPreviousWindow([int keyDelayMs = 100]) {
-    if (!Platform.isWindows && !Platform.isMacOS && !Platform.isLinux) return Future.value();
-    if (keyDelayMs < 0) {
-      throw Exception("KeyDelayMs cannot be less than 0");
-    }
-    final args = {"keyDelayMs": keyDelayMs};
-    return _channel.invokeMethod(kPasteToPreviousWindow, args);
+  Future<PasteResult> pasteToPreviousWindow() async {
+    if (!Platform.isWindows && !Platform.isMacOS && !Platform.isLinux) return PasteResult.success;
+    final value = await _channel.invokeMethod<String>(kPasteToPreviousWindow);
+    return PasteResult.parse(value ?? PasteResult.unknown.name);
   }
 
   ///getCurrentEnvironment (only Android)
@@ -342,6 +345,10 @@ class ClipboardManager {
         case kOnShizukuBinderStatusChanged:
           var available = arguments['available'] == true;
           listener.onShizukuBinderStatusChanged(available);
+          break;
+        case kOnForegroundChanged:
+          var isSelf = arguments['isSelf'] == true;
+          listener.onForegroundChanged(isSelf);
           break;
       }
     }

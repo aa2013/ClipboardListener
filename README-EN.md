@@ -198,6 +198,7 @@ iOS requires adding Picture-in-Picture support in `Info.plist`.
 | getSelectedFiles              | Get selected files in the file explorer                                                                                          | ✖️      | ✔️      | ✖️    | ✖️    | ✖️  |
 | isEnableExcludeFormat         | return whether to receive excluded formats                                                                                       | ✖️      | ✔️      | ✖️    | ✖️    | ✖️  |
 | setExcludeFormatEnabled       | Set whether to receive excluded formats                                                                                          | ✖️      | ✔️      | ✖️    | ✖️    | ✖️  |
+| onForegroundChanged           | Foreground window change event (Windows only); isSelf indicates whether the new foreground window belongs to this app process        | ✖️      | ✔️      | ✖️    | ✖️    | ✖️  |
 | pasteToPreviousWindow         | Paste into the automatically tracked previous foreground window (app-level on macOS, X11-only on Linux; Wayland cannot activate global foreground windows) | ✖️      | ✔️      | ✔️    | ✔️    | ✖️  |
 | setTempFileDir                | Set the temporary file directory (default is the current program path)                                                           | ✖️      | ✔️      | ✔️    | ✖️    | ✖️  |
 | onPermissionStatusChanged     | Permission status change event (Android only)                                                                                    | ✔️      | ✖️      | ✖️    | ✖️    | ✖️  |

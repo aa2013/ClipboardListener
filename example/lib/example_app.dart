@@ -42,6 +42,10 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
   // the app already has Shizuku permission.
   bool? shizukuBinderAvailable;
 
+  /// The latest foreground-window ownership reported by Windows (null before
+  /// the first event).
+  bool? lastForegroundIsSelf;
+
   final controller = TextEditingController();
 
   /// Returns the user-facing Shizuku binder connectivity status.
@@ -165,6 +169,14 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
                         excludeFormatEnabled: excludeFormatEnabled,
                         onExcludeFormatChanged: _setExcludeFormatEnabled,
                       ),
+                    if (Platform.isWindows)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Text(
+                          'Foreground window: $foregroundStatusText',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ),
                     if (Platform.isIOS)
                       IosControls(
                         startedPip: startedPip,
@@ -232,6 +244,21 @@ class _MyAppState extends State<MyApp> with ClipboardListener, WidgetsBindingObs
     setState(() {
       shizukuBinderAvailable = available;
     });
+  }
+
+  @override
+  void onForegroundChanged(bool isSelf) {
+    debugPrint('foreground isSelf: $isSelf');
+    setState(() {
+      lastForegroundIsSelf = isSelf;
+    });
+  }
+
+  /// Returns the display text for the latest foreground-window ownership.
+  String get foregroundStatusText {
+    final isSelf = lastForegroundIsSelf;
+    if (isSelf == null) return 'unknown';
+    return isSelf ? 'this app' : 'another app';
   }
 
   @override
