@@ -1,3 +1,13 @@
+## 1.3.5
+
+* Windows 调整：`pasteToPreviousWindow` 返回 `PasteResult` 枚举，便于上层统一处理粘贴结果。
+* Windows 调整：高权限窗口与完整性级别探测失败场景改为稳定状态返回
+* Windows 调整：将粘贴方案修改为 `SendInput`
+---
+* Windows change: `pasteToPreviousWindow` now returns a `PasteResult` enum for consistent result handling in Dart.
+* Windows change: Elevated-target and integrity-inspection failures now return stable result states.
+* Windows change: Switched the paste implementation to SendInput.
+
 ## 1.3.4
 
 * 桌面端调整：`pasteToPreviousWindow` 会自动跟踪上一个前台窗口/应用，移除公开的 `storeCurrentWindowHwnd` API。Linux 仅支持 X11，Wayland 不向普通客户端提供全局前台窗口激活能力。
