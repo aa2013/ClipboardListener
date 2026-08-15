@@ -10,6 +10,7 @@
 
 const char *kChannelName = "top.coclyun.clipshare/clipboard_listener";
 const char *kOnClipboardChanged = "onClipboardChanged";
+const char *kOnForegroundChanged = "onForegroundChanged";
 const char *kStartListening = "startListening";
 const char *kStopListening = "stopListening";
 const char *kCheckIsRunning = "checkIsRunning";
@@ -23,3 +24,4 @@ static FlMethodResponse *copyData(ClipshareClipboardListenerPlugin *self, const 
 static FlMethodResponse *pasteToPreviousWindow(ClipshareClipboardListenerPlugin *self, int64_t delayMs);
 static void sendClipboardData(ClipshareClipboardListenerPlugin *plugin, const gchar *type, const gchar *content);
 static void onWaylandClipboardChanged(GObject *owner, const gchar *type, const gchar *content);
+static void notifyForegroundChanged(ClipshareClipboardListenerPlugin *self, gboolean is_self);

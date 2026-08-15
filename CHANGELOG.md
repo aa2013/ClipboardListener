@@ -1,3 +1,11 @@
+## 1.3.6
+
+* Linux X11：新增 `onForegroundChanged` 事件，前台窗口变化时上报给 Dart（与 Windows 一致）。Wayland 下不提供（无稳定的全局前台窗口句柄）。
+* macOS：新增 `onForegroundChanged` 事件，前台应用切换时上报给 Dart（与 Windows/Linux 一致），`isSelf` 标记是否切回本进程。
+---
+* Linux X11: Emit `onForegroundChanged` when the foreground window changes (parity with Windows). Not available on Wayland (no stable global foreground window handle).
+* macOS: Emit `onForegroundChanged` when the frontmost app changes (parity with Windows/Linux); `isSelf` marks whether the switch returned to this process.
+
 ## 1.3.5
 
 * Windows 调整：`pasteToPreviousWindow` 返回 `PasteResult` 枚举，便于上层统一处理粘贴结果。

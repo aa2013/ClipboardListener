@@ -5,6 +5,7 @@ public class ClipshareClipboardListenerPlugin: NSObject, FlutterPlugin {
 
     private static let kChannelName = "top.coclyun.clipshare/clipboard_listener"
     private static let kOnClipboardChanged = "onClipboardChanged"
+    private static let kOnForegroundChanged = "onForegroundChanged"
     private static let kStartListening = "startListening"
     private static let kStopListening = "stopListening"
     private static let kCheckIsRunning = "checkIsRunning"
@@ -136,6 +137,7 @@ public class ClipshareClipboardListenerPlugin: NSObject, FlutterPlugin {
                 previousApp = activeApp
             }
             currentApp = nil
+            notifyForegroundChanged(isSelf: true)
             return
         }
         if app.processIdentifier == currentApp?.processIdentifier {
@@ -145,6 +147,16 @@ public class ClipshareClipboardListenerPlugin: NSObject, FlutterPlugin {
             previousApp = activeApp
         }
         currentApp = app
+        notifyForegroundChanged(isSelf: false)
+    }
+
+    // 前台应用切换（真实变化）时上报 Dart：isSelf=true 表示切回本进程（点击主窗口等）。
+    private func notifyForegroundChanged(isSelf: Bool) {
+        channel.invokeMethod(
+            ClipshareClipboardListenerPlugin.kOnForegroundChanged,
+            arguments: ["isSelf": isSelf],
+            result: nil
+        )
     }
 
     private func pasteToPreviousWindow(result: @escaping FlutterResult){

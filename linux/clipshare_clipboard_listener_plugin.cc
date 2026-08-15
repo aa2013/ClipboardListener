@@ -430,22 +430,36 @@ static guint getWindowProcessId(Window window)
     return pid;
 }
 
+static void notifyForegroundChanged(ClipshareClipboardListenerPlugin *self, gboolean is_self)
+{
+    if (!self->running || !self->channel) {
+        return;
+    }
+    g_autoptr(FlValue) args = fl_value_new_map();
+    g_autoptr(FlValue) is_self_key = fl_value_new_string("isSelf");
+    g_autoptr(FlValue) is_self_value = fl_value_new_bool(is_self);
+    fl_value_set(args, is_self_key, is_self_value);
+    fl_method_channel_invoke_method(self->channel, kOnForegroundChanged, args, nullptr, nullptr, nullptr);
+}
+
 static void updateForegroundWindow(ClipshareClipboardListenerPlugin *self, Window window)
 {
     if (window == 0 || window == self->current_window) {
         return;
     }
-    if (getWindowProcessId(window) == getpid()) {
+    gboolean is_self = getWindowProcessId(window) == getpid();
+    if (is_self) {
         if (self->current_window != 0) {
             self->previous_window = self->current_window;
         }
         self->current_window = 0;
-        return;
+    } else {
+        if (self->current_window != 0) {
+            self->previous_window = self->current_window;
+        }
+        self->current_window = window;
     }
-    if (self->current_window != 0) {
-        self->previous_window = self->current_window;
-    }
-    self->current_window = window;
+    notifyForegroundChanged(self, is_self);
 }
 
 static GdkFilterReturn onX11RootWindowEvent(GdkXEvent *xevent, GdkEvent *event, gpointer data)

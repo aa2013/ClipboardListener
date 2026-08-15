@@ -39,7 +39,7 @@ abstract mixin class ClipboardListener {
   /// [isGranted] When the Android system version is before Android 10, always return true
   void onPermissionStatusChanged(EnvironmentType environment, bool isGranted) {}
 
-  /// Called when the foreground window changes on the desktop. (Windows only)
+  /// Called when the foreground window changes on the desktop. (Windows, macOS and Linux X11 only)
   ///
   /// [isSelf] Whether the new foreground window belongs to this app process.
   /// This is used to detect when the user switches to another app so the app
