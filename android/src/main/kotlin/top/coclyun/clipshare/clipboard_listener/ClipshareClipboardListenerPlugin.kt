@@ -4,7 +4,6 @@ import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
 import android.annotation.SuppressLint
 import android.app.Activity
-import android.app.ActivityManager
 import android.content.ClipData
 import android.content.ClipDescription
 import android.content.ClipboardManager
@@ -22,7 +21,6 @@ import android.view.accessibility.AccessibilityManager
 import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
-import io.flutter.embedding.android.FlutterFragmentActivity.ACTIVITY_SERVICE
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
@@ -46,6 +44,7 @@ import top.coclyun.clipshare.clipboard_listener.service.ClipboardListenerService
 import top.coclyun.clipshare.clipboard_listener.service.CommandRunnerService
 import top.coclyun.clipshare.clipboard_listener.service.ForegroundService
 import top.coclyun.clipshare.clipboard_listener.service.LatestWriteClipboardPkgService
+import top.coclyun.clipshare.clipboard_listener.service.ListenerLifecycle
 import top.coclyun.clipshare.clipboard_listener.utils.getAppIconAsBase64
 import top.coclyun.clipshare.clipboard_listener.utils.getAppNameByPackageName
 import java.io.DataOutputStream
@@ -89,9 +88,9 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
     private val requestShizukuCode = 5001
     var currentEnv: EnvironmentType? = null
     var config: Config = Config()
-    var listening: Boolean = false
+    internal val listenerLifecycle = ListenerLifecycle()
+    val listening: Boolean get() = listenerLifecycle.running
     var listeningServiceArgs: UserServiceArgs? = null
-    var listeningServiceConn: ServiceConnection? = null
     var clipboardSourceArgs: UserServiceArgs? = null
     var clipboardSourceServiceConn: ServiceConnection? = null
     var latestWriteClipboardPkgService: ILatestWriteClipboardPkgService? = null
@@ -147,6 +146,7 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
     }
 
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
+        stopListening()
         destroyCommandRunnerService()
         stopShizukuBinderObserver()
         channel.setMethodCallHandler(null)
@@ -271,11 +271,15 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
      */
     fun handleShizukuUnavailable(reason: String) {
         Log.w(TAG, "Shizuku unavailable: $reason")
-        listening = false
-        commandRunnerBinding = false
-        commandRunnerService = null
-        latestWriteClipboardPkgService = null
+        val session = listenerLifecycle.current
+        if (session?.environment == EnvironmentType.shizuku) {
+            listenerLifecycle.stop(session)
+            ForegroundService.shizukuUnavailable(this, reason)
+        }
         if (currentEnv == EnvironmentType.shizuku) {
+            commandRunnerBinding = false
+            commandRunnerService = null
+            latestWriteClipboardPkgService = null
             currentEnv = null
         }
         notifyShizukuBinderStatusChanged(false)
@@ -410,6 +414,7 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
     private fun onCheckIsRunningCalled(call: MethodCall, result: Result) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
             result.success(true)
+            return
         }
         result.success(listening)
     }
@@ -1019,7 +1024,6 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
         env: EnvironmentType? = null,
         way: ClipboardListeningWay
     ): Boolean {
-        if (listening) return false
         if (env == EnvironmentType.root) {
             if (!checkRootPermission()) {
                 return false
@@ -1034,21 +1038,18 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
     }
 
     private fun startListening(env: EnvironmentType?, way: ClipboardListeningWay): Boolean {
+        val previous = listenerLifecycle.current
+        val session = listenerLifecycle.start(env ?: currentEnv, way)
+        if (session === previous) {
+            Log.d(TAG, "reuse listener session=${session.id}, state=${session.state}")
+            return true
+        }
         try {
-            val running = isServiceRunning(
-                context,
-                ForegroundService::class.java
-            )
-            Log.d(TAG, "service is running: $running")
+            Log.i(TAG, "request listener session=${session.id}, env=${session.environment}, way=$way")
             val serviceIntent = Intent(context, ForegroundService::class.java)
-            serviceIntent.putExtra(
-                "useRoot",
-                (env ?: currentEnv) == EnvironmentType.root
-            )
+            serviceIntent.putExtra(ForegroundService.EXTRA_SESSION_ID, session.id)
+            serviceIntent.putExtra("useRoot", session.environment == EnvironmentType.root)
             serviceIntent.putExtra("way", way.name)
-            if (running) {
-                context.stopService(serviceIntent)
-            }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(serviceIntent)
             } else {
@@ -1056,17 +1057,18 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
             }
             return true
         } catch (e: Exception) {
-            e.printStackTrace()
+            listenerLifecycle.finish(session)
+            ForegroundService.requestStop(this, "start service failed")
+            Log.e(TAG, "start listener session=${session.id} failed", e)
             return false
         }
     }
 
     private fun stopListening() {
         ClipboardListener.instance.removeObserver(this)
-        val serviceIntent = Intent(context, ForegroundService::class.java)
-        listening = false
+        listenerLifecycle.stop()
+        ForegroundService.requestStop(this, "stopListening requested")
         stopClipboardSourceService()
-        context.stopService(serviceIntent)
     }
 
     private fun initClipboardSourceShizukuService() {
@@ -1201,24 +1203,6 @@ class ClipshareClipboardListenerPlugin : FlutterPlugin, MethodCallHandler,
         }
     }
 
-    /**
-     * 判断服务是否运行
-     * @param context 上下文
-     * @param serviceClass 服务类
-     */
-    private fun isServiceRunning(context: Context, serviceClass: Class<*>): Boolean {
-        val activityManager = context.getSystemService(ACTIVITY_SERVICE) as ActivityManager
-
-        // 获取运行中的服务列表
-        for (service in activityManager.getRunningServices(Int.MAX_VALUE)) {
-            if (serviceClass.name == service.service.className) {
-                // 如果找到匹配的服务类名，表示服务在运行
-                return true
-            }
-        }
-        // 未找到匹配的服务类名，表示服务未在运行
-        return false
-    }
     //region check permissions
 
     private fun getCurrentEnvironment(): EnvironmentType? {

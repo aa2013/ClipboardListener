@@ -53,11 +53,17 @@ android {
         api "dev.rikka.shizuku:api:$shizuku_version"
         api "dev.rikka.shizuku:provider:$shizuku_version"
         implementation 'androidx.appcompat:appcompat:1.6.1'
-        testImplementation("org.jetbrains.kotlin:kotlin-test")
+        testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
         testImplementation("org.mockito:mockito-core:5.0.0")
+        // JVM 测试同时覆盖会话逻辑与 Android 服务生命周期。
+        testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.10.1")
+        testRuntimeOnly("org.junit.vintage:junit-vintage-engine:5.10.1")
+        testImplementation("junit:junit:4.13.2")
+        testImplementation("org.robolectric:robolectric:4.16")
     }
 
     testOptions {
+        unitTests.includeAndroidResources = true
         unitTests.all {
             useJUnitPlatform()
 
@@ -88,5 +94,7 @@ if (flutterRoot == null) {
 
 dependencies {
     compileOnly files("$flutterRoot/bin/cache/artifacts/engine/android-arm/flutter.jar")
+    // 服务测试需加载实现 FlutterPlugin 的宿主对象，不会打包到插件产物。
+    testImplementation files("$flutterRoot/bin/cache/artifacts/engine/android-arm/flutter.jar")
 }
 //endregion

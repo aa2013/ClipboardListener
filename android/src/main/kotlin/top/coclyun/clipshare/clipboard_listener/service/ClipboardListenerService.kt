@@ -1,36 +1,30 @@
 package top.coclyun.clipshare.clipboard_listener.service
 
-import android.os.Build
 import android.util.Log
 import top.coclyun.clipshare.clipboard_listener.EventEnum
 import top.coclyun.clipshare.clipboard_listener.IClipboardListenerService
 import top.coclyun.clipshare.clipboard_listener.IOnClipboardChanged
-import java.io.BufferedReader
-import java.io.DataOutputStream
 import java.io.File
-import java.io.InputStreamReader
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.system.exitProcess
 
 
-open class ClipboardListenerService : IClipboardListenerService.Stub() {
+open class ClipboardListenerService @JvmOverloads constructor(
+    private val rootInstance: Boolean = false,
+) : IClipboardListenerService.Stub() {
     private val TAG = "ClipboardListenerService"
-    private var process: Process? = null
-    private var stopped: Boolean = false
-    private var isRootMode: Boolean = false;
-    private var useHiddenApi: Boolean = false
-    private fun buildCommandsWithSpace(commands: Array<String>): String {
-        val res = Array(commands.size) { "" }
-        for (i in commands.indices) {
-            if (commands[i].contains(" ")) {
-                res[i] = "'" + commands[i] + "'" // �������
-            } else {
-                res[i] = commands[i]
-            }
+    @Volatile
+    private var isRootMode = rootInstance
+    private val runner = ListenerProcessRunner { id, reason, exitCode, failure ->
+        val message = "listener process session=$id, hostPid=${android.os.Process.myPid()}, " +
+            "reason=$reason, exitCode=$exitCode"
+        if (failure == null) {
+            Log.i(TAG, message)
+        } else {
+            Log.w(TAG, message, failure)
         }
-        return res.joinToString(" ")
     }
 
     override fun startListening(
@@ -39,136 +33,50 @@ open class ClipboardListenerService : IClipboardListenerService.Stub() {
         filePath: String,
         useHiddenApi: Boolean
     ) {
-        isRootMode = useRoot
-        var success = false;
-        this.useHiddenApi = useHiddenApi
-        if (useHiddenApi) {
-            success = tryRunProcess(callback, useRoot, filePath)
+        isRootMode = rootInstance || useRoot
+        val commands = if (useHiddenApi) {
+            listOf(
+                "app_process",
+                "-Djava.class.path=$filePath",
+                File(filePath).parent!!,
+                "top.coclyun.clipshare.clipboard_listener.ClipboardListener",
+                android.os.Process.myPid().toString()
+            )
         } else {
-            success = tryReadLogs(callback, useRoot)
+            val timeStamp = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US).format(Date())
+            listOf("logcat", "-T", timeStamp, "ClipboardService:E", "*:S")
         }
-        if (!success) {
-            Log.d(TAG, "error, useHiddenApi = $useHiddenApi")
-        }
-    }
-
-    private fun tryRunProcess(
-        callback: IOnClipboardChanged,
-        useRoot: Boolean,
-        filePath: String
-    ): Boolean {
-        val dirPath = File(filePath).parent
-        val hostPid = android.os.Process.myPid()
-        val commands = arrayOf(
-            "app_process",
-            "-Djava.class.path=$filePath",
-            dirPath,
-            "top.coclyun.clipshare.clipboard_listener.ClipboardListener",
-            hostPid.toString()
-        )
-        Log.d(TAG, "try run process: ${buildCommandsWithSpace(commands)}")
-        return tryRunAndWait(callback, useRoot, commands, false)
-    }
-
-    private fun tryReadLogs(callback: IOnClipboardChanged, useRoot: Boolean): Boolean {
-        val fmt = "yyyy-MM-dd HH:mm:ss.SSS"
-        val timeStamp = SimpleDateFormat(fmt, Locale.US).format(Date())
-        val commands = arrayOf("logcat", "-T", timeStamp, "ClipboardService:E", "*:S")
-        Log.d(TAG, "try read logs: ${buildCommandsWithSpace(commands)}")
-        return tryRunAndWait(callback, useRoot, commands, true)
-    }
-
-    private fun tryRunAndWait(
-        callback: IOnClipboardChanged,
-        useRoot: Boolean,
-        commands: Array<String>,
-        useLog: Boolean
-    ): Boolean {
-        if (stopped) {
-            return true
-        }
-        var reader: BufferedReader? = null
-        var error = false
-        try {
-            val processBuilder: ProcessBuilder
-            if (useRoot) {
-                processBuilder = ProcessBuilder(arrayOf("su").toList())
-                processBuilder.redirectErrorStream(true)
-                process = processBuilder.start()
-                val os = DataOutputStream(process!!.outputStream)
-                os.writeBytes("${buildCommandsWithSpace(commands)}\n")
-                os.flush()
+        Log.i(TAG, "start listener process useRoot=$useRoot, useHiddenApi=$useHiddenApi")
+        runner.run(commands, useRoot, gracefulExit = useHiddenApi) { line ->
+            if (!useHiddenApi) {
+                callback.onChanged(line)
+                true
             } else {
-                processBuilder = ProcessBuilder(commands.toList())
-                processBuilder.redirectErrorStream(true)
-                process = processBuilder.start()
-            }
-            reader = BufferedReader(InputStreamReader(process!!.inputStream))
-            var line: String?
-            while (reader.readLine().also { line = it } != null) {
-                Log.d(TAG, line!!)
-                if (useLog) {
-                    callback.onChanged(line!!)
-                } else {
-                    if (line!!.startsWith(EventEnum.onChanged.name + ":")) {
+                when {
+                    line.startsWith(EventEnum.onChanged.name + ":") -> {
                         callback.onChanged(null)
+                        true
                     }
-                    if (line!!.startsWith(EventEnum.fatal.name + ":")) {
-                        error = true
-                        break
+                    line.startsWith(EventEnum.fatal.name + ":") -> {
+                        Log.w(TAG, "listener process reported fatal event")
+                        false
                     }
-                    if (line!!.startsWith(EventEnum.eof.name + ":")) {
-                        error = false
-                        break
-                    }
+                    line.startsWith(EventEnum.eof.name + ":") -> false
+                    else -> true
                 }
             }
-        } catch (e: Exception) {
-            Log.w(TAG, "read error in loop: ${e.message}. ${e.stackTraceToString()}")
-            e.printStackTrace()
-            error = true;
-        } finally {
-            reader?.close()
         }
-        return error
     }
 
     override fun stopListening() {
-        Log.d(TAG, "stopListening")
-        stopped = true
-        stopProcess()
+        Log.i(TAG, "stopListening requested")
+        runner.stop()
     }
 
-    private fun stopProcess() {
-        try {
-            if (useHiddenApi) {
-                val os = DataOutputStream(process!!.outputStream)
-                os.writeBytes("exit\n")
-                os.flush()
-            }
-            val processTemp = process;
-            process = null
-            processTemp?.outputStream?.close()
-            processTemp?.inputStream?.close()
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                processTemp?.destroyForcibly()
-            } else {
-                processTemp?.destroy()
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
-
-    /**
-     * Reserved destroy method
-     */
     override fun destroy() {
-        Log.i(TAG, "destroy")
-        stopProcess()
-        if (!isRootMode) {
-            exitProcess(0)
-        }
+        Log.i(TAG, "destroy listener process")
+        runner.stop(permanent = true)
+        if (!isRootMode) exitProcess(0)
     }
 
     override fun exit() {

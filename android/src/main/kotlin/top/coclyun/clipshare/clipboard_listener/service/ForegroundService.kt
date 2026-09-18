@@ -14,7 +14,6 @@ import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
-import android.os.Message
 import android.provider.Settings
 import android.util.Log
 import android.view.Gravity
@@ -27,17 +26,18 @@ import android.view.WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
 import android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
 import androidx.core.app.NotificationCompat
 import rikka.shizuku.Shizuku
-import rikka.shizuku.Shizuku.OnBinderDeadListener
-import rikka.shizuku.Shizuku.OnBinderReceivedListener
 import top.coclyun.clipshare.clipboard_listener.ClipboardListener
 import top.coclyun.clipshare.clipboard_listener.ClipshareClipboardListenerPlugin
 import top.coclyun.clipshare.clipboard_listener.ClipboardListeningWay
+import top.coclyun.clipshare.clipboard_listener.Config
+import top.coclyun.clipshare.clipboard_listener.EnvironmentType
 import top.coclyun.clipshare.clipboard_listener.IClipboardListenerService
 import top.coclyun.clipshare.clipboard_listener.IOnClipboardChanged
 import top.coclyun.clipshare.clipboard_listener.R
 import top.coclyun.clipshare.clipboard_listener.copyAssetToExternalPrivateDir
 import java.io.File
 import java.lang.ref.WeakReference
+import java.util.concurrent.Executors
 
 //在OriginOS系统上有概率shizuku启动会失败，可以重新尝试
 //https://github.com/RikkaApps/Shizuku/issues/451
@@ -49,57 +49,66 @@ class ForegroundService : Service() {
         @JvmStatic
         val foregroundServiceNotifyChannelId = "ForegroundService"
 
-        @JvmStatic
-        private var listenerService: IClipboardListenerService? = null
+        internal const val EXTRA_SESSION_ID = "listenerSessionId"
+        private const val BIND_DELAY_MS = 500L
+        private var activeService = WeakReference<ForegroundService>(null)
+        // 跨服务实例串行释放远端资源，避免旧实例的解绑终止新实例刚建立的连接。
+        private val lifecycleExecutor = Executors.newSingleThreadExecutor { task ->
+            Thread(task, "clipboard-lifecycle").apply { isDaemon = true }
+        }
 
+        /** 停止 owner 的服务；尚未收到启动命令时由 onStartCommand 完成前台化后收口。 */
+        internal fun requestStop(owner: ClipshareClipboardListenerPlugin, reason: String) {
+            val service = activeService.get()?.takeIf { it.plugin === owner } ?: return
+            service.onMain { service.stopRequested(reason) }
+        }
+
+        /** Shizuku 失效时仅清理 owner 的 Shizuku 会话。 */
+        internal fun shizukuUnavailable(owner: ClipshareClipboardListenerPlugin, reason: String) {
+            val service = activeService.get()?.takeIf { it.plugin === owner } ?: return
+            val session = owner.listenerLifecycle.current
+            service.onMain {
+                if (service.resources?.session === session) service.stopShizukuListeningLocally(reason)
+            }
+        }
     }
 
     private val TAG = "ForegroundService"
     private val listenerZipFileName = "listener.zip"
 
-    private val mainHandler = MyHandler(this)
-//    private val mainHandler = Handler(Looper.getMainLooper())
+    private val mainHandler = Handler(Looper.getMainLooper())
     private var plugin: ClipshareClipboardListenerPlugin? = null
     private lateinit var windowManager: WindowManager
     private lateinit var mainParams: LayoutParams
     private lateinit var view: ViewGroup
-    private var useRoot: Boolean = false
-    private lateinit var listeningWay: ClipboardListeningWay
-    private var listenerThread: Thread? = null
+    private val lifecycleHandler = Handler(Looper.getMainLooper())
+    private var resources: SessionResources? = null
+    private var lastStartId = 0
+    private var destroyed = false
+    private val fallbackConfig = Config()
     private var lastChangedTime: Long = 0
     private var changedMinIntervalTime: Long = 200
     @Volatile
     private var isShowFloatView: Boolean = false
-    private val viewLock = Any()
 
     //region Clipboard Listener
-    private val clipboardListenerCallback = object : IOnClipboardChanged.Stub() {
-        override fun onChanged(logLine: String?) {
-            if (logLine != null && !logLine.contains(plugin!!.config.applicationId)) {
-                return
-            }
-            if (plugin!!.config.ignoreNextCopy) {
-                plugin!!.config.ignoreNextCopy = false
-            } else {
-                mainHandler.sendMessage(Message())
-            }
-        }
-
+    /** 资源只归属 session，回调不得转而读取其他代次的服务或连接。 */
+    private class SessionResources(
+        val session: ListenerLifecycle.Session,
+        val owner: ClipshareClipboardListenerPlugin,
+    ) {
+        val useRoot = session.environment == EnvironmentType.root
+        val args = owner.listeningServiceArgs
+        var service: IClipboardListenerService? = null
+        var connection: ServiceConnection? = null
+        var bindingIssued = false
+        var bindTask: Runnable? = null
+        var thread: Thread? = null
     }
 
-    class MyHandler(foregroundService: ForegroundService) : Handler() {
-        private val mOuter: WeakReference<ForegroundService> = WeakReference<ForegroundService>(foregroundService)
-
-        override fun handleMessage(msg: Message) {
-            mOuter.get().let {
-                Log.d("listener onChanged", it.toString())
-                it?.let {
-                    synchronized(it.viewLock) {
-                        it.showFloatFocusView()
-                    }
-                }
-            }
-        }
+    /** 将 action 串行投递到主线程，兼容后台权限检查触发的服务失效回调。 */
+    private fun onMain(action: () -> Unit) {
+        if (Looper.myLooper() == Looper.getMainLooper()) action() else lifecycleHandler.post { action() }
     }
 
     //endregion
@@ -107,6 +116,9 @@ class ForegroundService : Service() {
     //region float view
     override fun onCreate() {
         super.onCreate()
+        plugin = ClipshareClipboardListenerPlugin.instance
+        createNotify()
+        activeService = WeakReference(this)
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         val type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             LayoutParams.TYPE_APPLICATION_OVERLAY;
@@ -183,22 +195,7 @@ class ForegroundService : Service() {
     }
     //endregion
 
-    //region Shizuku
-
-    private val onBinderReceivedListener = OnBinderReceivedListener {
-        Log.d(TAG, "Shizuku binderReceived")
-    }
-    private val onBinderDeadListener = OnBinderDeadListener {
-        Log.d(TAG, "Shizuku binderDead")
-        stopShizukuListeningLocally("binder dead")
-    }
-    //endregion
-
-    /**
-     * 判断 Shizuku binder 是否仍然可用。
-     *
-     * 前台服务在 binder 失效后不能再调用远端 user service 或 unbind。
-     */
+    /** 判断 Shizuku Binder 是否可用，失效后不再调用远端清理接口。 */
     private fun isShizukuBinderAvailable(): Boolean {
         return try {
             Shizuku.pingBinder()
@@ -207,224 +204,269 @@ class ForegroundService : Service() {
         }
     }
 
-    /**
-     * Shizuku 断开或授权被撤销后的本地收口。
-     *
-     * 这里只清理本地线程和引用，不调用远端 stopListening/exit，避免已失效 binder 触发进程崩溃。
-     */
+    /** 仅清理当前 Shizuku 会话；reason 用于日志。 */
     private fun stopShizukuListeningLocally(reason: String) {
+        val current = resources ?: return
+        if (current.useRoot || destroyed) return
         Log.w(TAG, "stop Shizuku listening locally: $reason")
-        listenerThread?.interrupt()
-        listenerThread = null
-        listenerService = null
-        plugin?.listening = false
-        plugin?.listeningServiceConn = null
+        releaseSession(current, reason, remoteAvailable = false)
         notifyForeground(
             plugin?.config?.shizukuDisconnectedTitle ?: "Shizuku disconnected",
             plugin?.config?.shizukuDisconnectedText ?: "Shizuku service has been disconnected"
         )
-        plugin?.handleShizukuUnavailable(reason)
     }
 
+    /** 按请求编号启动监听；过期启动命令也需完成前台化后才能结束服务。 */
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Log.d(TAG, "onStartCommand")
-        try {
-            listenerService?.stopListening()
-        } catch (e: Exception) {
-            Log.w(TAG, "stop previous listener service failed", e)
-        }
-        listenerService = null
-        useRoot = intent?.getBooleanExtra("useRoot", false) ?: false
-        plugin = ClipshareClipboardListenerPlugin.instance
-        if (plugin == null) {
+        lastStartId = startId
+        // 每条 startForegroundService 请求都需确认，不能因重复或取消而提前返回。
+        createNotify()
+        resources?.takeIf { isCurrent(it) && it.session.state == ListenerLifecycle.State.RUNNING }
+            ?.let { notifyRunning(it) }
+        val owner = plugin
+        if (owner == null) {
             Log.e(TAG, "plugin not initialized")
-            stopSelf()
+            stopSelfResult(startId)
             return START_NOT_STICKY
         }
-        Shizuku.addBinderReceivedListenerSticky(onBinderReceivedListener)
-        Shizuku.addBinderDeadListener(onBinderDeadListener)
-        createNotify()
-        if (!copyAssetToExternalPrivateDir(
-                applicationContext,
-                listenerZipFileName,
-                listenerZipFileName
-            )
-        ) {
-            notifyForeground("Error", "Can not copy listener file")
-            throw RuntimeException("Can not copy listener file")
+        val session = owner.listenerLifecycle.current
+        Log.d(TAG, "onStartCommand startId=$startId, session=${session?.id}, state=${session?.state}")
+        if (session == null || !owner.listenerLifecycle.isActive(session)) {
+            stopRequested("start request cancelled")
+            return START_NOT_STICKY
         }
-        if (plugin == null) throw Exception("plugin instance is not init")
-        val wayStr = intent?.getStringExtra("way")
-        if (wayStr == null) {
-            notifyForeground("Error", "Listening way is null")
-            throw RuntimeException("Listening way is null")
-        }
-        try {
-            listeningWay = ClipboardListeningWay.valueOf(wayStr)
-            Log.d(TAG, "listeningWay $listeningWay")
-        } catch (e: Exception) {
-            notifyForeground("Error", "Can not mapping listen way for $wayStr")
-            throw RuntimeException("Can not mapping listen way for $wayStr")
-        }
-        if (!useRoot) {
-            if (plugin!!.listeningServiceConn != null) {
-                if (isShizukuBinderAvailable()) {
-                    try {
-                        Shizuku.unbindUserService(
-                            plugin!!.listeningServiceArgs!!,
-                            plugin!!.listeningServiceConn,
-                            true
-                        )
-                    } catch (e: Exception) {
-                        stopShizukuListeningLocally("unbind previous listener failed: ${e.message}")
-                    }
-                }
-                plugin!!.listeningServiceConn = null
+        if (intent?.getLongExtra(EXTRA_SESSION_ID, 0L) != session.id) return START_NOT_STICKY
+        if (resources?.session === session) return START_NOT_STICKY
+        resources?.let { releaseSession(it, "configuration changed") }
+        val current = SessionResources(session, owner)
+        resources = current
+        // 资源准备排在上一会话清理之后，远端调用不能阻塞主线程前台化。
+        lifecycleExecutor.execute {
+            if (!owner.listenerLifecycle.isActive(session)) return@execute
+            val copied = try {
+                copyAssetToExternalPrivateDir(applicationContext, listenerZipFileName, listenerZipFileName)
+            } catch (e: Exception) {
+                Log.e(TAG, "copy listener asset session=${session.id} failed", e)
+                false
             }
-            plugin!!.listeningServiceConn = object : ServiceConnection {
-
-                private var service: IClipboardListenerService? = null
-
-                //在OriginOS系统上有概率shizuku启动会失败，可以重新尝试
-                //https://github.com/RikkaApps/Shizuku/issues/451
-                override fun onServiceConnected(componentName: ComponentName, binder: IBinder) {
-                    if (service != null) {
-                        try {
-                            service?.stopListening()
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                        }
-                        return
-                    }
-                    Log.d(TAG, "onServiceConnected ${componentName.className}")
-                    plugin!!.listening = true
-                    notifyForeground(
-                        plugin!!.config.serviceRunningTitle,
-                        plugin!!.config.shizukuRunningText
-                    )
-                    listenerService = IClipboardListenerService.Stub.asInterface(binder)
-                    service = listenerService
-                    try {
-                        startListening()
-                    } catch (e: Exception) {
-                        e.printStackTrace()
-                        plugin!!.listening = false
-                        listenerService = null
-                        Log.w(TAG, "onServiceConnected Error: ${e.message}")
-                    }
-                }
-
-                override fun onServiceDisconnected(componentName: ComponentName) {
-                    stopShizukuListeningLocally("listener service disconnected")
+            lifecycleHandler.post {
+                if (!isCurrent(current)) return@post
+                if (!copied) {
+                    notifyForeground("Error", "Can not copy listener file")
+                    releaseSession(current, "asset copy failed")
+                } else if (current.useRoot) {
+                    current.service = ClipboardListenerService(true)
+                    startListening(current)
+                } else {
+                    bindListener(current)
                 }
             }
-            Handler().postDelayed({
-                if (!isShizukuBinderAvailable()) {
-                    stopShizukuListeningLocally("bind listener skipped because Shizuku is unavailable")
-                    return@postDelayed
-                }
-                try {
-                    Shizuku.bindUserService(
-                        plugin!!.listeningServiceArgs!!,
-                        plugin!!.listeningServiceConn!!
-                    )
-                } catch (e: Exception) {
-                    stopShizukuListeningLocally("bind listener failed: ${e.message}")
-                }
-            }, 500)
-        } else {
-            listenerService = ClipboardListenerService()
-            notifyForeground(
-                plugin!!.config.serviceRunningTitle,
-                plugin!!.config.rootRunningText
-            )
-            plugin!!.listening = true
-            startListening()
         }
         return START_NOT_STICKY
     }
 
     override fun onBind(intent: Intent): IBinder? {
-        return null;
+        return null
     }
 
-    private fun startListening() {
-        var errorTextPrefix = plugin!!.config.errorTextPrefix
+    /** 判断 current 的回调是否仍归属本服务的有效会话。 */
+    private fun isCurrent(current: SessionResources): Boolean = !destroyed &&
+        resources === current && current.owner.listenerLifecycle.isActive(current.session)
+
+    /** 为 current 建立独立连接；重复 Binder 回调不能停止或重新启动已有监听。 */
+    private fun bindListener(current: SessionResources) {
+        val connection = object : ServiceConnection {
+            /** 将当前会话首次收到的 Binder 交给监听线程。 */
+            override fun onServiceConnected(componentName: ComponentName, binder: IBinder) {
+                if (!isCurrent(current) || current.service != null) {
+                    Log.d(TAG, "ignore listener connection session=${current.session.id}")
+                    return
+                }
+                current.service = IClipboardListenerService.Stub.asInterface(binder)
+                startListening(current)
+            }
+
+            /** 子服务断开不等于 Shizuku 整体不可用，旧连接不能改变新会话状态。 */
+            override fun onServiceDisconnected(componentName: ComponentName) {
+                if (!isCurrent(current)) return
+                Log.w(TAG, "listener disconnected session=${current.session.id}")
+                if (!isShizukuBinderAvailable()) {
+                    current.owner.handleShizukuUnavailable("listener service disconnected")
+                } else {
+                    listenerFinished(current, null)
+                }
+            }
+        }
+        current.connection = connection
+        val task = Runnable {
+            if (!isCurrent(current)) return@Runnable
+            if (!isShizukuBinderAvailable()) {
+                current.owner.handleShizukuUnavailable("bind listener skipped because Shizuku is unavailable")
+                return@Runnable
+            }
+            try {
+                current.bindingIssued = true
+                Shizuku.bindUserService(requireNotNull(current.args), connection)
+                Log.d(TAG, "bind listener session=${current.session.id}")
+            } catch (e: Exception) {
+                Log.w(TAG, "bind listener session=${current.session.id} failed", e)
+                if (!isShizukuBinderAvailable()) {
+                    current.owner.handleShizukuUnavailable("bind listener failed: ${e.message}")
+                } else {
+                    listenerFinished(current, e)
+                }
+            }
+        }
+        current.bindTask = task
+        lifecycleHandler.postDelayed(task, BIND_DELAY_MS)
+    }
+
+    /** 启动 current 的唯一监听线程，变化回调和退出通知均携带原会话身份。 */
+    private fun startListening(current: SessionResources) {
+        if (!isCurrent(current)) return
+        var errorTextPrefix = current.owner.config.errorTextPrefix
         errorTextPrefix = if (errorTextPrefix.isEmpty()) "" else ": "
-        if (listenerService == null) {
+        val service = current.service
+        if (service == null) {
             notifyForeground(
-                plugin!!.config.errorTitle,
+                current.owner.config.errorTitle,
                 "${errorTextPrefix}ListenerService is null"
             )
+            releaseSession(current, "listener service is null")
             return
         }
-        Log.d(TAG, "listening start")
-        listenerThread?.interrupt()
-        listenerThread = Thread {
+        if (!current.owner.listenerLifecycle.markRunning(current.session)) return
+        notifyRunning(current)
+        val callback = object : IOnClipboardChanged.Stub() {
+            /** 停止后排队的旧变化事件不能触发悬浮窗。 */
+            override fun onChanged(logLine: String?) {
+                mainHandler.post {
+                    if (!isCurrent(current)) return@post
+                    val config = current.owner.config
+                    if (logLine != null && !logLine.contains(config.applicationId)) return@post
+                    if (config.ignoreNextCopy) {
+                        config.ignoreNextCopy = false
+                    } else {
+                        showFloatFocusView()
+                    }
+                }
+            }
+        }
+        val path = File(applicationContext.getExternalFilesDir(null), listenerZipFileName).path
+        current.thread = Thread {
+            var failure: Exception? = null
             try {
-                Log.d(TAG, "listening, useRoot $useRoot, listeningWay $listeningWay")
-                val path =
-                    File(applicationContext.getExternalFilesDir(null), listenerZipFileName).path
-                listenerService!!.startListening(
-                    clipboardListenerCallback,
-                    useRoot,
+                if (!current.owner.listenerLifecycle.isActive(current.session)) return@Thread
+                Log.i(TAG, "listening session=${current.session.id}, useRoot=${current.useRoot}, way=${current.session.way}")
+                service.startListening(
+                    callback,
+                    current.useRoot,
                     path,
-                    listeningWay == ClipboardListeningWay.hiddenApi,
+                    current.session.way == ClipboardListeningWay.hiddenApi,
                 )
             } catch (e: Exception) {
-                e.printStackTrace()
-                Log.i(TAG, "startListening: error ${e.message} listening ${plugin?.listening != true}")
-                // 监听线程可能晚于插件释放后退出，通知文案使用安全兜底避免二次崩溃。
-                notifyForeground(
-                    plugin?.config?.errorTitle ?: "Error",
-                    "${errorTextPrefix}${e.message}"
-                )
+                failure = e
+                Log.w(TAG, "listener returned with error session=${current.session.id}", e)
             }
-            plugin?.listening = false
-            Log.i(TAG, "startListening: stopped")
+            lifecycleHandler.post { listenerFinished(current, failure) }
+        }.apply {
+            isDaemon = true
+            name = "clipboard-listener-${current.session.id}"
+            start()
+        }
+    }
+
+    /** 使用 current 环境对应的既有通知文案，重复启动不能留下等待通知。 */
+    private fun notifyRunning(current: SessionResources) {
+        notifyForeground(
+            current.owner.config.serviceRunningTitle,
+            if (current.useRoot) current.owner.config.rootRunningText else current.owner.config.shizukuRunningText
+        )
+    }
+
+    /** 仅为当前会话的异常结束通知；failure 为空代表监听调用自行返回。 */
+    private fun listenerFinished(current: SessionResources, failure: Exception?) {
+        if (!isCurrent(current)) return
+        Log.w(TAG, "listener stopped unexpectedly session=${current.session.id}, error=${failure?.javaClass?.simpleName}")
+        if (failure != null) {
+            var errorTextPrefix = current.owner.config.errorTextPrefix
+            errorTextPrefix = if (errorTextPrefix.isEmpty()) "" else ": "
+            notifyForeground(
+                plugin?.config?.errorTitle ?: "Error",
+                "${errorTextPrefix}${failure.message}"
+            )
+        } else {
             notifyForeground(
                 plugin?.config?.stopListeningTitle ?: "Stopped",
                 plugin?.config?.stopListeningText ?: "Clipboard listener stopped"
             )
         }
-        listenerThread?.isDaemon = true
-        listenerThread?.start()
+        releaseSession(current, "listener returned")
     }
 
-    override fun onDestroy() {
-        Log.i(TAG, "ForegroundService onDestroy $listenerService")
-        plugin?.listening = false
-        val t = listenerThread
-        listenerThread = null
-        t?.interrupt()
-        if (useRoot || isShizukuBinderAvailable()) {
-            try {
-                listenerService?.exit()
-            } catch (e: Exception) {
-                Log.w(TAG, "exit listener service failed", e)
-            }
+    /** 撤销 current 并排队清理；remoteAvailable=false 时不访问失效 Binder。 */
+    private fun releaseSession(current: SessionResources, reason: String, remoteAvailable: Boolean = true) {
+        current.owner.listenerLifecycle.stop(current.session)
+        current.bindTask?.let { lifecycleHandler.removeCallbacks(it) }
+        current.bindTask = null
+        current.thread = null
+        if (resources === current) {
+            resources = null
+            mainHandler.removeCallbacksAndMessages(null)
+            removeFloatFocusView()
         }
-        try {
-            if (!useRoot && isShizukuBinderAvailable()) {
-                plugin?.listeningServiceArgs?.let { args ->
-                    plugin?.listeningServiceConn?.let { conn ->
-                        Shizuku.unbindUserService(args, conn, true)
+        Log.i(TAG, "release listener session=${current.session.id}, reason=$reason, bound=${current.bindingIssued}")
+        lifecycleExecutor.execute {
+            try {
+                if (current.useRoot) {
+                    current.service?.destroy()
+                } else if (remoteAvailable && isShizukuBinderAvailable()) {
+                    // 仅解绑实际提交过的连接，不能用当前插件的其他会话连接清理旧资源。
+                    if (current.bindingIssued) {
+                        current.args?.let { args ->
+                            current.connection?.let { connection ->
+                                Shizuku.unbindUserService(args, connection, true)
+                            }
+                        }
                     }
                 }
+            } catch (e: Exception) {
+                Log.w(TAG, "release listener session=${current.session.id} failed", e)
+            } finally {
+                current.owner.listenerLifecycle.finish(current.session)
             }
-            plugin?.listeningServiceConn = null
-        } catch (e: Exception) {
-            Log.w(TAG, "unbind listening service failed", e)
         }
-        Shizuku.removeBinderReceivedListener(onBinderReceivedListener)
-        Shizuku.removeBinderDeadListener(onBinderDeadListener)
+    }
+
+    /** 主动停止时使用已收到的 startId，防止结束框架已经接收的新启动请求。 */
+    private fun stopRequested(reason: String) {
+        if (destroyed) return
+        resources?.let {
+            if (it.owner.listenerLifecycle.isActive(it.session)) return
+            releaseSession(it, reason)
+        }
+        val current = plugin?.listenerLifecycle?.current
+        if (current != null && plugin?.listenerLifecycle?.isActive(current) == true) return
+        current?.let { plugin?.listenerLifecycle?.finish(it) }
+        if (lastStartId != 0) stopSelfResult(lastStartId)
+    }
+
+    /** 只清理本实例拥有的资源，旧实例销毁不得覆盖后续请求的状态。 */
+    override fun onDestroy() {
+        destroyed = true
+        Log.i(TAG, "ForegroundService onDestroy session=${resources?.session?.id}")
+        resources?.let { releaseSession(it, "service destroyed") }
+        lifecycleHandler.removeCallbacksAndMessages(null)
+        mainHandler.removeCallbacksAndMessages(null)
+        removeFloatFocusView()
+        if (activeService.get() === this) activeService.clear()
         stopForeground(STOP_FOREGROUND_REMOVE)
-        listenerService = null
         super.onDestroy()
     }
 
     //region notify
 
+    /** 立即以前台通知确认启动，不先执行其他通知或远端操作。 */
     private fun createNotify() {
         // 在 Android 8.0 及以上版本，需要创建通知渠道
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -433,8 +475,6 @@ class ForegroundService : Service() {
         // 创建并显示通知
         val notification = buildNotification()
 
-        val manger = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-        manger.notify(foregroundServiceNotificationId, notification)
         startForeground(foregroundServiceNotificationId, notification)
     }
 
@@ -453,6 +493,7 @@ class ForegroundService : Service() {
         }
     }
 
+    /** 插件尚未初始化时复用 Config 的既有默认文案，保证服务仍可前台化。 */
     private fun buildNotification(): Notification {
         // 创建通知
         val builder: Notification.Builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -462,13 +503,14 @@ class ForegroundService : Service() {
         }
 
         // 设置通知的标题、内容等
-        builder.setContentTitle(plugin!!.config.waitingRunningTitle)
+        val config = plugin?.config ?: fallbackConfig
+        builder.setContentTitle(config.waitingRunningTitle)
             .setSmallIcon(getAppIcon(applicationContext))
             .setOngoing(true)
             .setSound(null)
             .setContentIntent(createPendingIntent())
 //            .setBadgeIconType(NotificationCompat.BADGE_ICON_NONE)
-            .setContentText(plugin!!.config.waitingRunningText)
+            .setContentText(config.waitingRunningText)
         return builder.build()
     }
 
