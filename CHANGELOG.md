@@ -1,3 +1,8 @@
+## 1.4.0
+* iOS 新增：支持 Swift Package Manager。
+---
+* Added Swift Package Manager support for iOS.
+
 ## 1.3.6
 
 * Linux X11：新增 `onForegroundChanged` 事件，前台窗口变化时上报给 Dart（与 Windows 一致）。Wayland 下不提供（无稳定的全局前台窗口句柄）。
