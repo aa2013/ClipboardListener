@@ -23,6 +23,7 @@
 #include <filesystem>
 #include <regex>
 #include "listening_hidden_window.cpp"
+#include "dib_utils.h"
 #include <vector>
 #include <shlobj.h>
 #include <atlbase.h> // CComPtr
@@ -868,11 +869,15 @@ namespace clipshare_clipboard_listener {
 			return nullptr;
 		}
 		// 将 CF_DIB 数据转换为 HBITMAP
-		const HDC hdc = GetDC(nullptr);
 		const auto info = static_cast<BITMAPINFO*>(pData);
 		const auto header = static_cast<const BITMAPINFOHEADER*>(pData);
-		//创建位图，位图数据从 header + 1 开始
-		const HBITMAP hBitmap = CreateDIBitmap(hdc, header, CBM_INIT, header + 1, info, DIB_RGB_COLORS);
+		// 像素数据位于头部、颜色掩码和调色板之后，不能直接用 header + 1
+		const SIZE_T pixelOffset = GetDibPixelOffset(header);
+		if (pixelOffset >= GlobalSize(hData))
+			return nullptr;
+		const HDC hdc = GetDC(nullptr);
+		const HBITMAP hBitmap = CreateDIBitmap(hdc, header, CBM_INIT,
+			static_cast<const BYTE*>(pData) + pixelOffset, info, DIB_RGB_COLORS);
 		if (hBitmap == nullptr)
 			return nullptr;
 		auto currentTime = GetCurrentTimeWithMilliseconds();
