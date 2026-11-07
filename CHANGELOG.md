@@ -1,3 +1,16 @@
+## 1.4.1
+* Windows 修复：复制图片失败时剪贴板未关闭，导致系统剪贴板被本进程永久占用、其他程序无法复制的问题
+* Windows 修复：Windows 下 32 位 BI_BITFIELDS 剪贴板图片错位
+* Windows 修复：剪贴板读取路径多处资源泄漏——全局内存未解锁、屏幕 DC 未释放、返回字符串无人释放
+* Windows 修复：SetClipboardData 成功后误释放系统接管的内存；失败时未释放分配的内存
+* Windows 优化：文件系统操作改用 error_code 重载，消除持锁期间的异常逃逸；剪贴板开关统一由单一函数负责
+---
+* Windows fix: The clipboard is now properly closed when image copy fails, preventing the process from permanently holding the system clipboard lock.
+* Windows fix: Misaligned clipboard images for 32-bit BI_BITFIELDS DIBs.
+* Windows fix: Resource leaks in the clipboard read path (unlocked global memory, leaked screen DC, leaked returned strings).
+* Windows fix: No longer frees system-owned memory after a successful SetClipboardData; the allocation is now freed when it fails.
+* Windows change: Filesystem operations use error_code overloads to avoid exceptions while the clipboard is open; clipboard open/close is now owned by a single function.
+
 ## 1.4.0
 * iOS 新增：支持 Swift Package Manager。
 ---
