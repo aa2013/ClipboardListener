@@ -542,6 +542,7 @@ namespace clipshare_clipboard_listener {
 		    return;
 		}
 		SendClipboardData(type, *text);
+		delete text;
 	}
 
 
@@ -747,6 +748,8 @@ namespace clipshare_clipboard_listener {
 		EmptyClipboard();
 		std::wstring data = Utf16FromUtf8(content).c_str();
 		HGLOBAL hClipboardData = nullptr;
+		// SetClipboardData 的结果：成功后内存归系统所有，失败时仍归本进程需要自行释放
+		HANDLE hDataSetResult = nullptr;
 		//文本类型
 		if (type == "text")
 		{
@@ -763,6 +766,7 @@ namespace clipshare_clipboard_listener {
 			if (!pchData)
 			{
 				CloseClipboard();
+				GlobalFree(hClipboardData);
 				std::cerr << "Failed to lock!" << std::endl;
 				return false;
 			}
@@ -770,17 +774,20 @@ namespace clipshare_clipboard_listener {
 			GlobalUnlock(hClipboardData);
 
 			// 将全局内存放入剪贴板
-			SetClipboardData(CF_UNICODETEXT, hClipboardData);
+			hDataSetResult = SetClipboardData(CF_UNICODETEXT, hClipboardData);
 		}
 		if (type == "image")
 		{
 			CImage image;
 			if (FAILED(image.Load(std::wstring(content.begin(), content.end()).c_str()))) {
+				// 剪贴板已打开并清空，必须关闭后才能返回，否则系统级剪贴板锁会被本线程永久持有
+				CloseClipboard();
 				return false;
 			}
 			HBITMAP hBitmap = image.Detach();
 			if (hBitmap == nullptr) {
 				std::cerr << "Failed to load image." << std::endl;
+				CloseClipboard();
 				return false;
 			}
 			BitmapToClipboard(hBitmap, nullptr);
@@ -788,9 +795,9 @@ namespace clipshare_clipboard_listener {
 		}
 		// 关闭剪贴板
 		CloseClipboard();
-		if (hClipboardData)
+		if (hClipboardData && hDataSetResult == nullptr)
 		{
-			//释放GlobalAlloc分配的内存
+			//SetClipboardData 失败时内存未被系统接管，需要自行释放；成功后释放会破坏剪贴板内容
 			GlobalFree(hClipboardData);
 		}
 		return true;
@@ -802,7 +809,7 @@ namespace clipshare_clipboard_listener {
 		const HANDLE hData = GetClipboardData(CF_UNICODETEXT);
 		if (hData == nullptr)
 		{
-			CloseClipboard();
+			// 剪贴板的关闭由 GetClipboardDataCustom 统一负责
 			return nullptr;
 		}
 
@@ -810,11 +817,10 @@ namespace clipshare_clipboard_listener {
 		const wchar_t* pszText = static_cast<wchar_t*>(GlobalLock(hData));
 		if (pszText == nullptr)
 		{
-			CloseClipboard();
 			return nullptr;
 		}
 
-		// 释放内存和关闭剪贴板
+		// 释放内存；剪贴板的关闭由 GetClipboardDataCustom 统一负责
 		GlobalUnlock(hData);
 		// 复制数据到字符串
 		return new std::wstring(pszText);
@@ -827,9 +833,11 @@ namespace clipshare_clipboard_listener {
 		image.Attach(hbtmip);
 		auto path = outputPath->c_str();
 		std::string folderPath = fs::path(path).parent_path().string();
-		if (!fs::exists(folderPath))
+		// 使用 error_code 重载，避免创建目录失败抛异常导致上层跳过 CloseClipboard
+		std::error_code ec;
+		if (!fs::exists(folderPath, ec) && !fs::create_directories(folderPath, ec))
 		{
-			fs::create_directories(folderPath);
+			return false;
 		}
 		// 保存为 PNG 格式
 		if (image.Save(path, Gdiplus::ImageFormatPNG) != S_OK)
@@ -857,7 +865,7 @@ namespace clipshare_clipboard_listener {
 		const HANDLE hData = GetClipboardData(CF_DIB);
 		if (hData == nullptr)
 		{
-			CloseClipboard();
+			// 剪贴板的关闭由 GetClipboardDataCustom 统一负责
 			return nullptr;
 		}
 
@@ -865,7 +873,6 @@ namespace clipshare_clipboard_listener {
 		void* pData = GlobalLock(hData);
 		if (pData == nullptr)
 		{
-			CloseClipboard();
 			return nullptr;
 		}
 		// 将 CF_DIB 数据转换为 HBITMAP
@@ -874,12 +881,20 @@ namespace clipshare_clipboard_listener {
 		// 像素数据位于头部、颜色掩码和调色板之后，不能直接用 header + 1
 		const SIZE_T pixelOffset = GetDibPixelOffset(header);
 		if (pixelOffset >= GlobalSize(hData))
+		{
+			GlobalUnlock(hData);
 			return nullptr;
+		}
 		const HDC hdc = GetDC(nullptr);
 		const HBITMAP hBitmap = CreateDIBitmap(hdc, header, CBM_INIT,
 			static_cast<const BYTE*>(pData) + pixelOffset, info, DIB_RGB_COLORS);
+		// DIB 数据已消费完毕，无论成败都要解锁；失败时还需释放屏幕 DC
+		GlobalUnlock(hData);
 		if (hBitmap == nullptr)
+		{
+			ReleaseDC(nullptr, hdc);
 			return nullptr;
+		}
 		auto currentTime = GetCurrentTimeWithMilliseconds();
 		// 使用正则表达式替换所有冒号和空格
 		std::regex reg("[:.]");
@@ -894,13 +909,20 @@ namespace clipshare_clipboard_listener {
 		}
 		auto fileName = timeStr + L".png";
 		// 拼接图片临时存储路径
-		const auto path = new std::wstring(tmpDir + fileName);
+		const std::wstring path = tmpDir + fileName;
 		//位图转PNG存储
-		auto res = DIBToPNG(hBitmap, path);
+		auto res = DIBToPNG(hBitmap, &path);
 		ReleaseDC(nullptr, hdc);
-		//获取存储的绝对路径
-		auto absolutePath = fs::absolute(path->c_str()).string();
-		return res ? new std::wstring(absolutePath.begin(), absolutePath.end()) : nullptr;
+		if (!res) {
+			return nullptr;
+		}
+		//获取存储的绝对路径，使用 error_code 重载避免异常逃逸
+		std::error_code ec;
+		auto absolutePath = fs::absolute(path.c_str(), ec).string();
+		if (ec) {
+			return nullptr;
+		}
+		return new std::wstring(absolutePath.begin(), absolutePath.end());
 	}
 
 	std::wstring* ClipshareClipboardListenerPlugin::GetClipboardDataCustom(std::string& type, int retry)
