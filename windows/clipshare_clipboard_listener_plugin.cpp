@@ -24,6 +24,8 @@
 #include <regex>
 #include "listening_hidden_window.cpp"
 #include "dib_utils.h"
+#include "explorer_selection.h"
+#include "utils.h"
 #include <vector>
 #include <shlobj.h>
 #include <atlbase.h> // CComPtr
@@ -546,85 +548,6 @@ namespace clipshare_clipboard_listener {
 	}
 
 
-	std::string ClipshareClipboardListenerPlugin::GetCurrentTimeWithMilliseconds()
-	{
-		// 获取当前时间点
-		auto now = std::chrono::system_clock::now();
-
-		// 将时间点转换为 time_t 类型
-		std::time_t time = std::chrono::system_clock::to_time_t(now);
-
-		// 获取时间结构体
-		std::tm tm_time = *std::localtime(&time);
-
-		// 获取毫秒数
-		auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) % 1000;
-
-		// 格式化时间字符串
-		std::ostringstream oss;
-		oss << std::put_time(&tm_time, "%Y-%m-%d %H:%M:%S") << '.' << std::setw(3) << std::setfill('0') << milliseconds.
-			count();
-
-		return oss.str();
-	}
-	std::string ClipshareClipboardListenerPlugin::Utf8FromUtf16(const wchar_t* utf16_string) {
-		if (utf16_string == nullptr) {
-			return std::string();
-		}
-		int target_length = ::WideCharToMultiByte(
-			CP_UTF8, WC_ERR_INVALID_CHARS, utf16_string,
-			-1, nullptr, 0, nullptr, nullptr)
-			- 1; // remove the trailing null character
-		int input_length = (int)wcslen(utf16_string);
-		std::string utf8_string;
-		if (target_length <= 0 || target_length > utf8_string.max_size()) {
-			return utf8_string;
-		}
-		utf8_string.resize(target_length);
-		int converted_length = ::WideCharToMultiByte(
-			CP_UTF8, WC_ERR_INVALID_CHARS, utf16_string,
-			input_length, utf8_string.data(), target_length, nullptr, nullptr);
-		if (converted_length == 0) {
-			return std::string();
-		}
-		return utf8_string;
-	}
-	std::wstring ClipshareClipboardListenerPlugin::Utf16FromUtf8(const std::string& string)
-	{
-		int size_needed = MultiByteToWideChar(CP_UTF8, 0, string.c_str(), -1, nullptr, 0);
-		if (size_needed == 0)
-		{
-			return {};
-		}
-		std::wstring wstrTo(size_needed, 0);
-		int converted_length = MultiByteToWideChar(CP_UTF8, 0, string.c_str(), -1, &wstrTo[0], size_needed);
-		if (converted_length == 0)
-		{
-			return {};
-		}
-		return wstrTo;
-	}
-
-	// wstring -> UTF-8 
-	static std::string WStringToUtf8(const std::wstring& wstr) {
-		if (wstr.empty()) return {};
-		int size_needed = ::WideCharToMultiByte(
-			CP_UTF8, 0,
-			wstr.c_str(), (int)wstr.size(),
-			nullptr, 0,
-			nullptr, nullptr
-		);
-		if (size_needed <= 0) return {};
-		std::string utf8;
-		utf8.resize(size_needed);
-		::WideCharToMultiByte(
-			CP_UTF8, 0,
-			wstr.c_str(), (int)wstr.size(),
-			&utf8[0], size_needed,
-			nullptr, nullptr
-		);
-		return utf8;
-	}
 
 	void ClipshareClipboardListenerPlugin::SendClipboardData(std::string& type, std::wstring& content)
 	{
@@ -847,18 +770,6 @@ namespace clipshare_clipboard_listener {
 		return true;
 	}
 
-	std::wstring ClipshareClipboardListenerPlugin::GetExecutableDir() {
-		wchar_t buffer[MAX_PATH];
-		DWORD length = GetModuleFileNameW(NULL, buffer, MAX_PATH);
-		if (length == 0) {
-			// Handle error
-			return L"";
-		}
-		std::wstring path(buffer, length);
-		size_t pos = path.find_last_of(L"\\/");
-		return (std::wstring::npos == pos) ? L"" : path.substr(0, pos + 1);
-	}
-
 	std::wstring* ClipshareClipboardListenerPlugin::GetClipboardImg()
 	{
 		// 尝试获取剪贴板中的数据
@@ -970,110 +881,4 @@ namespace clipshare_clipboard_listener {
 	}
 
 
-	bool ClipshareClipboardListenerPlugin::GetSelectedFilesFromDesktop(std::vector<std::wstring>& paths) {
-		return false;
-	}
-
-	bool ClipshareClipboardListenerPlugin::GetSelectedFilesFromExplorer(std::vector<std::wstring>& paths)
-	{
-		HRESULT hr;
-		hr = CoInitialize(NULL);
-		if (!SUCCEEDED(hr))
-			return false;
-
-		CComPtr<IShellWindows> shellWindows;
-		hr = shellWindows.CoCreateInstance(CLSID_ShellWindows);
-		if (!SUCCEEDED(hr))
-			return false;
-
-		long count;
-		shellWindows->get_Count(&count);
-		HWND foregroundWindow = GetForegroundWindow();
-		//HWND handle = FindWindow(L"CabinetWClass", nullptr);
-		for (long i = 0; i < count; ++i)
-		{
-			VARIANT index;
-			index.vt = VT_I4;
-			index.lVal = i;
-
-			CComPtr<IDispatch> dispatch;
-			shellWindows->Item(index, &dispatch);
-			//参考：https://cloud.tencent.com/developer/ask/sof/114218481
-			CComPtr<IServiceProvider> sp;
-			hr = dispatch->QueryInterface(IID_IServiceProvider, (void**)&sp);
-			if (!SUCCEEDED(hr))
-				return false;
-
-			CComPtr<IShellBrowser> browser;
-			hr = sp->QueryService(SID_STopLevelBrowser, IID_IShellBrowser, (void**)&browser);
-			if (!SUCCEEDED(hr))
-				return false;
-
-			//webBrowser用于获取shellwindow的hwnd
-			CComPtr<IWebBrowserApp> webBrowser;
-			hr = dispatch->QueryInterface(IID_IWebBrowserApp, (void**)&webBrowser);
-			if (!SUCCEEDED(hr))
-				return false;
-
-			HWND hwnd;
-			hr = webBrowser->get_HWND((SHANDLE_PTR*)&hwnd);
-			if (!SUCCEEDED(hr) || foregroundWindow != hwnd) {
-				//不在前台，跳过
-				continue;
-			}
-
-			CComPtr<IShellView > sw;
-			hr = browser->QueryActiveShellView(&sw);
-			if (!SUCCEEDED(hr))
-				return false;
-
-			CComPtr<IDataObject > items;
-			hr = sw->GetItemObject(SVGIO_SELECTION, IID_PPV_ARGS(&items));
-			if (!SUCCEEDED(hr))
-				return false;
-
-			FORMATETC fmt = { CF_HDROP, NULL, DVASPECT_CONTENT, -1, TYMED_HGLOBAL };
-			STGMEDIUM stg;
-			hr = items->GetData(&fmt, &stg);
-			if (!SUCCEEDED(hr))
-				return false;
-
-			HDROP hDrop = static_cast<HDROP>(GlobalLock(stg.hGlobal));
-			if (hDrop != NULL) {
-				UINT numPaths = DragQueryFileW(hDrop, 0xFFFFFFFF, NULL, 0);
-
-				for (UINT j = 0; j < numPaths; ++j) {
-					UINT bufferSize = DragQueryFileW(hDrop, j, NULL, 0) + 1;
-					std::wstring path(bufferSize, L'\0');
-					DragQueryFileW(hDrop, j, &path[0], bufferSize);
-					path.resize(bufferSize - 1);
-					paths.push_back(path);
-				}
-				GlobalUnlock(stg.hGlobal);
-				ReleaseStgMedium(&stg);
-			}
-		}
-
-		//// Clean up and exit
-		CoUninitialize();
-		return true;
-	}
-
-	bool ClipshareClipboardListenerPlugin::GetSelectedFiles(std::string& fileList) {
-		std::vector<std::wstring> paths;
-		HWND foregroundHwnd = GetForegroundWindow();
-		bool isdeskTop = false;
-		// 获取前台窗口的类名
-		wchar_t className[256];
-		GetClassNameW(foregroundHwnd, className, sizeof(className) / sizeof(className[0]));
-		// 判断窗口类名是否为桌面窗口的类名
-		if (wcscmp(className, L"Progman") == 0 || wcscmp(className, L"WorkerW") == 0) {
-			isdeskTop = true;
-		}
-		bool succeed = isdeskTop ? GetSelectedFilesFromDesktop(paths) : GetSelectedFilesFromExplorer(paths);
-		for (const auto& path : paths) {
-			fileList += Utf8FromUtf16(path.c_str()) + ";";
-		}
-		return succeed;
-	}
 }  // namespace clipshare_clipboard_listener

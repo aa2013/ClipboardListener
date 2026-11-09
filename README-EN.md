@@ -37,7 +37,7 @@ Add this to your package's `pubspec.yaml` file:
 
 ```yaml
 dependencies:
-  clipshare_clipboard_listener: ^1.4.0
+  clipshare_clipboard_listener: ^1.4.2
 ```
 
 ### Usage
@@ -195,7 +195,7 @@ iOS requires adding Picture-in-Picture support in `Info.plist`.
 | copy                          | Copy content (does not trigger `onClipboardChanged`)                                                                             | ✔️      | ✔️      | ✔️    | ✔️    | ✔️  |
 | startPIP                      | start picture-in-picture                                                                                                         | ✖️      | ✖️      | ✖️    | ✖️    | ✔️  |
 | stopPIP                       | stop picture-in-picture                                                                                                          | ✖️      | ✖️      | ✖️    | ✖️    | ✔️  |
-| getSelectedFiles              | Get selected files in the file explorer                                                                                          | ✖️      | ✔️      | ✖️    | ✖️    | ✖️  |
+| getSelectedFiles              | Get selected files in the file explorer or desktop                                                                               | ✖️      | ✔️      | ✖️    | ✖️    | ✖️  |
 | isEnableExcludeFormat         | return whether to receive excluded formats                                                                                       | ✖️      | ✔️      | ✖️    | ✖️    | ✖️  |
 | setExcludeFormatEnabled       | Set whether to receive excluded formats                                                                                          | ✖️      | ✔️      | ✖️    | ✖️    | ✖️  |
 | onForegroundChanged           | Foreground window change event (Windows only); isSelf indicates whether the new foreground window belongs to this app process        | ✖️      | ✔️      | ✖️    | ✖️    | ✖️  |

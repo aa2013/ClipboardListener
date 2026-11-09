@@ -1,3 +1,8 @@
+## 1.4.2
+* Windows 新增：桌面端支持获取选中的文件
+---
+* Windows feat: Support getting selected files on the desktop.
+
 ## 1.4.1
 * Windows 修复：复制图片失败时剪贴板未关闭，导致系统剪贴板被本进程永久占用、其他程序无法复制的问题
 * Windows 修复：Windows 下 32 位 BI_BITFIELDS 剪贴板图片错位

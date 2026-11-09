@@ -183,7 +183,7 @@ class ClipboardManager {
     return _channel.invokeMethod(kRequestPermission, args);
   }
 
-  ///get files selected by user in the explorer (only Windows and not desktop folder)
+  ///get files selected by user in the explorer or desktop (only Windows)
   Future<SelectedFilesResult> getSelectedFiles() {
     if (!Platform.isWindows) {
       return Future.value(SelectedFilesResult.empty());

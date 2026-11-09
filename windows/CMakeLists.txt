@@ -22,6 +22,10 @@ list(APPEND PLUGIN_SOURCES
         "clipshare_clipboard_listener_plugin.h"
         "listening_hidden_window.cpp"
         "dib_utils.h"
+        "utils.cpp"
+        "utils.h"
+        "explorer_selection.cpp"
+        "explorer_selection.h"
 )
 
 # Define the plugin library target. Its name must not be changed (see comment

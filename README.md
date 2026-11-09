@@ -34,7 +34,7 @@
 
 ```yaml
 dependencies:
-  clipshare_clipboard_listener: ^1.4.0
+  clipshare_clipboard_listener: ^1.4.2
 ```
 
 ### 用法
@@ -193,7 +193,7 @@ iOS 需要在 `info.plist` 中增加画中画支持
 | copy                          | 复制内容（不会触发`onClipboardChanged`事件）                          | ✔️      | ✔️      | ✔️    | ✔️    | ✔️  |
 | startPIP                      | 启动画中画                                                     | ✖️      | ✖️      | ✖️    | ✖️    | ✔️  |
 | stopPIP                       | 关闭画中画                                                     | ✖️      | ✖️      | ✖️    | ✖️    | ✔️  |
-| getSelectedFiles              | 获取资源管理器中选择的文件                                             | ✖️      | ✔️      | ✖️    | ✖️    | ✖️  |
+| getSelectedFiles              | 获取资源管理器/桌面中选择的文件                                        | ✖️      | ✔️      | ✖️    | ✖️    | ✖️  |
 | isEnableExcludeFormat         | 是否接收排除格式                                                  | ✖️      | ✔️      | ✖️    | ✖️    | ✖️  |
 | setExcludeFormatEnabled       | 设置是否接收排除格式                                                | ✖️      | ✔️      | ✖️    | ✖️    | ✖️  |
 | onForegroundChanged          | 前台窗口变化事件（仅Windows有效），isSelf 表示新的前台窗口是否属于本应用进程                   | ✖️      | ✔️      | ✖️    | ✖️    | ✖️  |
